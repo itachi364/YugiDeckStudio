@@ -109,3 +109,61 @@ Reglas:
 - Debe persistir cantidad, nombre original, seccion y orden visual.
 - Si el deck ya tiene cartas extraidas, debe rechazar la operacion con `409 Conflict`.
 - Si no se detecta ninguna carta, debe marcar la extraccion como `FAILED` y devolver `400 Bad Request`.
+
+## 4. Corregir cartas extraidas
+
+### `PUT /api/decks/{deckId}/cards`
+
+Reemplaza las cartas extraidas por OCR con la version corregida por el usuario antes de confirmar la revision.
+
+Parametros de ruta:
+
+| Campo | Tipo | Reglas |
+| --- | --- | --- |
+| `deckId` | string | Debe existir en base de datos. |
+
+Body:
+
+```json
+{
+  "cards": [
+    {
+      "section": "MAIN",
+      "quantity": 3,
+      "originalName": "Silvy del Bosque Blanco",
+      "displayOrder": 1
+    }
+  ]
+}
+```
+
+Reglas:
+
+- Solo se permite si el OCR fue ejecutado.
+- Solo se permite mientras `reviewStatus` sea `PENDING`.
+- Debe reemplazar la lista completa de cartas del deck.
+- Las cartas corregidas quedan en `ResolutionStatus.UNRESOLVED` hasta la resolucion de nombres.
+
+## 5. Confirmar revision OCR
+
+### `POST /api/decks/{deckId}/review/confirm`
+
+Confirma que el usuario reviso y corrigio las cartas extraidas.
+
+Respuesta exitosa `200 OK`:
+
+```json
+{
+  "deckId": "uuid",
+  "status": "REVIEWED",
+  "reviewStatus": "CONFIRMED",
+  "cardCount": 42
+}
+```
+
+Reglas:
+
+- Solo se permite si el OCR fue ejecutado.
+- El deck debe tener al menos una carta extraida o corregida.
+- Al confirmar, `reviewStatus` cambia a `CONFIRMED` y `status` cambia a `REVIEWED`.
+- La generacion de imagen debe bloquearse cuando `reviewStatus` no sea `CONFIRMED`.

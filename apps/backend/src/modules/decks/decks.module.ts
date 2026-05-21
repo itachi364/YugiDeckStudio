@@ -1,6 +1,9 @@
 import { Module } from "@nestjs/common";
 import { PrismaModule } from "../../infrastructure/prisma/prisma.module";
+import { ConfirmDeckReviewUseCase } from "./application/confirm-deck-review.use-case";
+import { DeckReviewPolicyService } from "./application/deck-review-policy.service";
 import { ExtractDeckListFromImageUseCase } from "./application/extract-deck-list.use-case";
+import { UpdateDeckCardsUseCase } from "./application/update-deck-cards.use-case";
 import { UploadDeckListUseCase } from "./application/upload-deck-list.use-case";
 import { DecksController } from "./decks.controller";
 import { DeckListParser } from "./domain/deck-list-parser";
@@ -14,6 +17,9 @@ import { OCR_PORT } from "./ports/ocr.port";
   providers: [
     UploadDeckListUseCase,
     ExtractDeckListFromImageUseCase,
+    UpdateDeckCardsUseCase,
+    ConfirmDeckReviewUseCase,
+    DeckReviewPolicyService,
     DeckListParser,
     LocalImageStorageService,
     {

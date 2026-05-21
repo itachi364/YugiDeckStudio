@@ -496,6 +496,8 @@ Reglas:
 - El deck list subido no se puede reemplazar sobre el mismo deck.
 - La revisión OCR es obligatoria antes de generar imagen.
 - Antes de generar imagen se permite corregir cartas extraídas.
+- La corrección reemplaza la lista completa de cartas del deck mientras la revisión esté pendiente.
+- Confirmar revisión cambia `review_status` a `CONFIRMED` y `status` a `REVIEWED`.
 - Después de generar imagen, el operador no puede eliminar ni inactivar el deck.
 - Después de generar imagen, solo `store_admin` o `root` pueden inactivar el deck.
 - Inactivar el deck aplica soft delete o estado inactivo sobre la data.

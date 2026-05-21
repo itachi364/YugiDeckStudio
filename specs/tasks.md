@@ -105,13 +105,19 @@
     - Texto OCR original persistido en `Deck.rawOcrText`.
     - Cartas extraídas persistidas como `DeckCard`.
 
-- [ ] TASK-010: Implementar revisión y corrección obligatoria.
+- [x] TASK-010: Implementar revisión y corrección obligatoria.
   - Criterios de aceptación:
     - AC-004.
     - AC-022.
   - Pruebas:
     - Corrección de cartas no resueltas.
     - Bloqueo de generación sin revisión confirmada.
+  - Criterios de finalización:
+    - Contrato `PUT /api/decks/{deckId}/cards` documentado.
+    - Contrato `POST /api/decks/{deckId}/review/confirm` documentado.
+    - Corrección de cartas OCR implementada.
+    - Confirmación de revisión implementada.
+    - Política de bloqueo de generación sin revisión confirmada implementada.
 
 - [ ] TASK-011: Implementar resolución de nombres de cartas en inglés.
   - Criterios de aceptación:
