@@ -119,14 +119,19 @@
     - Confirmación de revisión implementada.
     - Política de bloqueo de generación sin revisión confirmada implementada.
 
-- [ ] TASK-011: Implementar resolución de nombres de cartas en inglés.
+- [x] TASK-011: Implementar resolución de nombres de cartas en inglés.
   - Criterios de aceptación:
     - AC-005.
   - Pruebas:
     - Normalización.
     - Cartas no resueltas y ambiguas.
+  - Criterios de finalización:
+    - Contrato `POST /api/decks/{deckId}/resolve-card-names` documentado.
+    - Normalización de nombres implementada.
+    - Resolución contra caché local de cartas implementada.
+    - Estados `RESOLVED`, `AMBIGUOUS` y `UNRESOLVED` persistidos.
 
-- [ ] TASK-012: Implementar adaptador de YGOPRODeck.
+- [x] TASK-012: Implementar adaptador de YGOPRODeck.
   - Criterios de aceptación:
     - AC-006.
     - AC-007.
@@ -136,15 +141,27 @@
     - Cliente HTTP mockeado.
     - Comportamiento cache-first.
     - Bloqueo cuando falta caché y no hay internet.
+  - Criterios de finalización:
+    - Adaptador YGOPRODeck cache-first implementado.
+    - Búsqueda exacta `name` implementada.
+    - Búsqueda difusa `fname` implementada como fallback.
+    - Metadatos de cartas persistidos en caché local.
+    - Fallo de conexión manejado sin romper la resolución.
 
-- [ ] TASK-013: Implementar caché permanente de imágenes de cartas.
+- [x] TASK-013: Implementar caché permanente de imágenes de cartas.
   - Criterios de aceptación:
     - AC-008.
     - AC-034.
   - Pruebas:
     - Storage y cliente HTTP mockeados.
+  - Criterios de finalización:
+    - Contrato `POST /api/decks/{deckId}/cache-card-images` documentado.
+    - Puerto `CardImageStoragePort` implementado.
+    - Adaptador local de imágenes de cartas implementado.
+    - Imágenes de cartas persistidas como `CARD_IMAGE` con retención `PERMANENT`.
+    - Cartas con imagen ya cacheada no se descargan nuevamente.
 
-- [ ] TASK-014: Implementar generación de imagen del deck.
+- [x] TASK-014: Implementar generación de imagen del deck.
   - Criterios de aceptación:
     - AC-009.
     - AC-026.
@@ -156,8 +173,14 @@
     - Fondo propio con prioridad.
     - Color de fondo cuando no hay fondo propio.
     - Metadatos de salida node-canvas.
+  - Criterios de finalización:
+    - Contrato `POST /api/decks/{deckId}/generate-image` documentado.
+    - Puerto `DeckImageRendererPort` implementado.
+    - Adaptador `node-canvas` implementado.
+    - Generación `1080x1350` persistida como `GENERATED_DECK_IMAGE`.
+    - Bloqueo por cartas o imágenes faltantes implementado.
 
-- [ ] TASK-015: Implementar configuración de tienda, eventos, torneos y redes sociales.
+- [x] TASK-015: Implementar configuración de tienda, eventos, torneos y redes sociales.
   - Criterios de aceptación:
     - AC-010.
   - Pruebas:
@@ -165,8 +188,15 @@
     - Tipos de eventos.
     - Tipos de torneos.
     - Redes sociales y logos permanentes.
+  - Criterios de finalización:
+    - Contratos de configuración de tienda documentados.
+    - Endpoint de subida de assets configurables implementado.
+    - Assets de logos, fondos e iconos persistidos como `PERMANENT`.
+    - Configuración de tipos de eventos implementada.
+    - Configuración de tipos de torneos implementada.
+    - Configuración de redes sociales implementada.
 
-- [ ] TASK-016: Implementar autenticación local, root y primer admin de tienda.
+- [x] TASK-016: Implementar autenticación local, root y primer admin de tienda.
   - Criterios de aceptación:
     - AC-011.
     - AC-012.
@@ -184,8 +214,15 @@
     - Único `root`.
     - Único `store_admin` por tienda.
     - N operadores por tienda.
+  - Criterios de finalización:
+    - Contratos de autenticación local documentados.
+    - Seed inicial de `root` documentado e implementado.
+    - Login JWT local implementado.
+    - Cambio obligatorio de contraseña soportado.
+    - Creación del primer administrador de tienda por `root` implementada.
+    - Registro local de operadores implementado.
 
-- [ ] TASK-017: Implementar roles, permisos y asignaciones.
+- [x] TASK-017: Implementar roles, permisos y asignaciones.
   - Criterios de aceptación:
     - AC-015.
     - AC-019.
@@ -195,8 +232,15 @@
     - Asignación de permisos a roles.
     - Asignación de roles a usuarios.
     - Autorización de operaciones protegidas.
+  - Criterios de finalización:
+    - Contratos de roles y permisos documentados.
+    - Gestión de roles implementada.
+    - Gestión de permisos implementada.
+    - Asignación de permisos a roles implementada.
+    - Asignación de roles a usuarios implementada.
+    - Guard de autorización por permisos implementado.
 
-- [ ] TASK-018: Implementar aislamiento multi-tienda.
+- [x] TASK-018: Implementar aislamiento multi-tienda.
   - Criterios de aceptación:
     - AC-020.
     - AC-021.
@@ -204,8 +248,14 @@
     - Filtros por `store_id`.
     - Bloqueo de acceso cruzado.
     - Acceso global solo para `root`.
+  - Criterios de finalización:
+    - Política de acceso por tienda implementada.
+    - Guard para endpoints con `storeId` implementado.
+    - Guard para endpoints con `deckId` implementado.
+    - Endpoints de tiendas protegidos por alcance de tienda.
+    - Endpoints de decks protegidos por alcance de tienda.
 
-- [ ] TASK-019: Implementar ciclo de vida de decks.
+- [x] TASK-019: Implementar ciclo de vida de decks.
   - Criterios de aceptación:
     - AC-022.
     - AC-023.
@@ -217,6 +267,12 @@
     - Inactivación por `store_admin` o `root`.
     - Bloqueo de inactivación por `operator`.
     - Soft delete del deck.
+  - Criterios de finalización:
+    - Contrato `POST /api/decks/{deckId}/inactivate` documentado.
+    - Inactivación de deck implementada.
+    - Inactivación limitada a `root` y `store_admin`.
+    - Soft delete con `status = INACTIVE` implementado.
+    - Eliminación física de deck list e imágenes generadas implementada.
 
 - [ ] TASK-020: Implementar repositorios de persistencia.
   - Criterios de aceptación:

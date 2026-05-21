@@ -17,6 +17,7 @@
     "dev:frontend": "npm run dev --workspace @yugideckstudio/frontend",
     "prisma:generate": "npm run prisma:generate --workspace @yugideckstudio/backend",
     "prisma:migrate": "npm run prisma:migrate --workspace @yugideckstudio/backend",
+    "prisma:seed": "npm run prisma:seed --workspace @yugideckstudio/backend",
     "docker:up": "docker compose up --build",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",

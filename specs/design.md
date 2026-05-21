@@ -401,6 +401,28 @@ Los contratos finales de API deben documentarse antes de la implementación. End
 - `PUT /api/tournament-types/{tournamentTypeId}`
 - `POST /api/maintenance/image-cleanup/run`
 
+## 7.1 Diseño de configuración de tienda
+
+Mientras autenticación y aislamiento se implementan en tareas posteriores, la configuración recibe `store_id` explícito por ruta.
+
+El módulo de tiendas debe permitir:
+
+- consultar y actualizar branding de tienda;
+- subir logos, iconos y fondos como assets permanentes;
+- configurar tipos de eventos por tienda;
+- configurar tipos de torneos por tienda;
+- reemplazar la lista de redes sociales por tienda.
+
+Reglas:
+
+- Logos primario y secundario de tienda usan assets `store_logo`.
+- Fondos propios usan assets `background_image`.
+- Logos de eventos y tipos de torneos usan assets `event_logo`.
+- Iconos de redes sociales usan assets `social_logo`.
+- Todos los assets configurables usan política `permanent`.
+- Los updates de eventos, torneos y redes siempre filtran por `store_id`.
+- La generación de imagen consume estos valores desde PostgreSQL y nunca desde datos hardcodeados.
+
 ## 8. Diseño de generación de imagen
 
 La plantilla por defecto debe soportar:
@@ -420,6 +442,15 @@ El renderer debe recibir datos estructurados del deck y configuración de brandi
 La versión `v0.1.0` tendrá una sola plantilla base parametrizable.
 
 La tienda puede configurar fondo propio o color de fondo. Si existe fondo propio activo, el renderer debe usarlo con prioridad. Si no existe fondo propio activo, debe usar el color de fondo configurado por la tienda.
+
+El caso de uso de generación debe validar antes del renderizado:
+
+- revisión OCR confirmada;
+- todas las entradas del deck resueltas contra `Card`;
+- todas las cartas con `image_asset_id` activo;
+- rutas locales seguras resueltas desde el volumen configurado.
+
+La salida del renderer se guarda como PNG, se registra en `managed_image_assets` con categoría `generated_deck_image`, política `temporary_cleanup_allowed` y dimensiones `1080x1350`, y se vincula en `generated_deck_images`.
 
 ## 8.1 Diseño de autenticación y autorización
 
@@ -475,11 +506,42 @@ Reglas de usuarios:
 - `store_admin` puede crear operadores en su tienda.
 - `operator` no puede crear usuarios.
 
+Implementación inicial `v0.1.0`:
+
+- `InitializeRootUserUseCase` crea el único root local y roles de sistema.
+- `LoginUseCase` autentica credenciales locales y emite JWT.
+- `ChangePasswordUseCase` limpia `must_change_password`.
+- `ConfigureFirstStoreAdminUseCase` permite a `root` crear la tienda y su primer administrador, o asignar el primer administrador a una tienda existente.
+- `RegisterUserUseCase` crea usuarios locales no-root como `operator` vinculados a una tienda.
+- `JwtAuthGuard` valida el token local.
+- `RootOnlyGuard` bloquea operaciones root si el usuario no es root o si `must_change_password = true`.
+- El seed inicial crea `root` solo cuando no existen usuarios previos.
+
 Permisos iniciales:
 
 - `root`: todos los permisos globales.
 - `store_admin`: configuración de tienda, eventos, torneos, redes, logos, usuarios operadores, decks e imágenes de su tienda.
 - `operator`: carga de deck lists, revisión de extracción, corrección previa a generación, generación y descarga de imágenes de su tienda.
+
+Implementación de roles y permisos:
+
+- `ConfigureRolesUseCase` crea, actualiza y lista roles.
+- `ConfigurePermissionsUseCase` crea, actualiza y lista permisos.
+- `AssignPermissionsToRoleUseCase` reemplaza permisos asignados a un rol.
+- `AssignRolesToUserUseCase` reemplaza roles asignados a un usuario.
+- `PermissionGuard` evalúa permisos declarados por `RequirePermissions`.
+- El permiso inicial `security.manage` protege la administración de roles y permisos.
+- `root` puede ejecutar operaciones protegidas sin depender de permisos persistidos.
+- Usuarios no-root se autorizan mediante permisos persistidos en `role_permissions`.
+
+Implementación de aislamiento multi-tienda:
+
+- `StoreAccessPolicyService` permite acceso global a `root` y compara `user.store_id` contra el `store_id` solicitado para usuarios no-root.
+- `StoreScopeGuard` valida endpoints que reciben `storeId` en ruta o body.
+- `DeckScopeGuard` resuelve `deck.store_id` desde PostgreSQL antes de ejecutar operaciones de deck.
+- Los endpoints de configuración de tienda usan `JwtAuthGuard` + `StoreScopeGuard`.
+- Los endpoints de decks usan `JwtAuthGuard` + `StoreScopeGuard` para carga y `JwtAuthGuard` + `DeckScopeGuard` para operaciones por `deckId`.
+- Usuarios con `must_change_password = true` no pueden operar recursos de tienda.
 
 ## 8.2 Diseño de ciclo de vida del deck
 
@@ -502,6 +564,16 @@ Reglas:
 - Después de generar imagen, solo `store_admin` o `root` pueden inactivar el deck.
 - Inactivar el deck aplica soft delete o estado inactivo sobre la data.
 - Los archivos físicos de deck list subido e imagen generada pueden eliminarse según retención o inactivación administrativa.
+
+Implementación:
+
+- `InactivateDeckUseCase` valida que el deck exista y tenga `status = IMAGE_GENERATED`.
+- `InactivateDeckUseCase` permite la operación solo a `root` o usuarios con rol `store_admin`.
+- La operación conserva la data histórica y cambia el deck a `INACTIVE`.
+- Se registran `inactive_at`, `inactive_by_user_id` e `inactivity_reason`.
+- Los assets `uploaded_decklist` y `generated_deck_image` asociados se marcan con `deleted_at`.
+- Los archivos físicos del deck list subido y de las imágenes generadas se eliminan del volumen local.
+- No se eliminan assets permanentes como cartas, logos, fondos o redes sociales.
 
 ## 8.3 Diseño de modo sin internet
 
@@ -535,10 +607,25 @@ El acceso a YGOPRODeck se aísla detrás de `CardCatalogPort`.
 El adaptador debe:
 
 - Respetar límites de solicitudes.
+- Consultar caché local antes de realizar llamadas HTTP.
+- Consultar por `name` exacto y usar `fname` difuso como fallback cuando no haya resultado exacto.
 - Agrupar búsquedas cuando sea posible usando `name` con nombres separados por `|`.
 - Almacenar payloads de API para trazabilidad.
 - Cachear resultados exitosos de cartas.
 - Evitar hotlinking permanente delegando la descarga de imágenes a `CardImageStoragePort`.
+
+## 10.1 Diseño de caché permanente de imágenes de cartas
+
+`CacheCardImageUseCase` debe descargar las imágenes fuente de cartas resueltas usando `CardImageStoragePort`.
+
+Reglas:
+
+- Las imágenes de cartas se guardan en el volumen local bajo `card-images/`.
+- Cada asset se persiste como `managed_image_assets.category = card_image`.
+- Cada asset usa `retention_policy = permanent`.
+- `cards.image_asset_id` referencia el asset permanente cacheado.
+- Si una carta ya tiene asset activo, no se descarga de nuevo.
+- Si falta la URL fuente o falla la descarga, la carta queda reportada como faltante para bloquear la generación posterior.
 
 ## 11. Diseño Docker local
 

@@ -10,6 +10,11 @@ export interface StoredImageFile {
   storagePath: string;
 }
 
+export interface StoredGeneratedImageFile extends StoredImageFile {
+  mimeType: string;
+  sizeBytes: number;
+}
+
 @Injectable()
 export class LocalImageStorageService {
   constructor(private readonly configService: ConfigService) {}
@@ -25,6 +30,22 @@ export class LocalImageStorageService {
 
     return {
       checksum,
+      storagePath
+    };
+  }
+
+  async saveGeneratedDeckImage(buffer: Buffer): Promise<StoredGeneratedImageFile> {
+    const checksum = createHash("sha256").update(buffer).digest("hex");
+    const storagePath = path.join("generated-deck-images", `${randomUUID()}.png`);
+    const absolutePath = this.resolveInsideStorage(storagePath);
+
+    await mkdir(path.dirname(absolutePath), { recursive: true });
+    await writeFile(absolutePath, buffer);
+
+    return {
+      checksum,
+      mimeType: "image/png",
+      sizeBytes: buffer.length,
       storagePath
     };
   }
