@@ -63,13 +63,17 @@
     - Rutas, checksums, MIME types, tamaños y políticas de retención persistidos.
     - Cartas y logos marcados como permanentes.
 
-- [ ] TASK-007: Implementar proceso semanal de depuración de imágenes temporales.
+- [x] TASK-007: Implementar proceso semanal de depuración de imágenes temporales.
   - Criterios de aceptación:
     - AC-033.
     - AC-034.
   - Pruebas:
     - Selección de imágenes depurables.
     - Protección de assets permanentes.
+  - Criterios de finalización:
+    - Servicio `image-cleaner` configurado en Docker Compose.
+    - Endpoint manual `POST /api/maintenance/image-cleanup/run` disponible.
+    - Runner backend `maintenance:image-cleanup` disponible.
 
 ## Fase 3: Backend
 
@@ -299,7 +303,7 @@
   - Criterios de finalización:
     - Resultados de pruebas reportados.
 
-- [ ] TASK-030: Preparar propuesta de commit con Gitmoji.
+- [x] TASK-030: Preparar propuesta de commit con Gitmoji.
   - Criterios de aceptación:
     - Definición de terminado SDD.
   - Criterios de finalización:

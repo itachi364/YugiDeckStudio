@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
+    "maintenance:image-cleanup": "node dist/maintenance/image-cleanup.runner.js",
     "test": "jest --config jest.config.js",
     "test:watch": "jest --watch --config jest.config.js",
     "lint": "tsc --noEmit -p tsconfig.build.json",

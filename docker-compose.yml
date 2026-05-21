@@ -35,10 +35,34 @@ services:
       ROOT_DEFAULT_PASSWORD: ${ROOT_DEFAULT_PASSWORD:-ChangeMe123!}
       ROOT_MUST_CHANGE_PASSWORD: ${ROOT_MUST_CHANGE_PASSWORD:-true}
       IMAGE_STORAGE_PATH: ${IMAGE_STORAGE_PATH:-/data/images}
+      UPLOADED_DECKLIST_RETENTION_DAYS: ${UPLOADED_DECKLIST_RETENTION_DAYS:-7}
+      GENERATED_IMAGE_RETENTION_DAYS: ${GENERATED_IMAGE_RETENTION_DAYS:-7}
       YGOPRODECK_API_BASE_URL: ${YGOPRODECK_API_BASE_URL:-https://db.ygoprodeck.com/api/v7}
       YGOPRODECK_RATE_LIMIT_PER_SECOND: ${YGOPRODECK_RATE_LIMIT_PER_SECOND:-20}
     ports:
       - "${BACKEND_PORT:-3000}:3000"
+    volumes:
+      - yugideck_image_data:/data/images
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - yugideck_local
+
+  image-cleaner:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    container_name: yugideckstudio-image-cleaner
+    restart: unless-stopped
+    command: ["sh", "-c", "while true; do node dist/maintenance/image-cleanup.runner.js; sleep ${IMAGE_CLEANUP_INTERVAL_SECONDS:-604800}; done"]
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://yugideck:yugideck_local_password@postgres:5432/yugideckstudio?schema=public}
+      IMAGE_STORAGE_PATH: ${IMAGE_STORAGE_PATH:-/data/images}
+      UPLOADED_DECKLIST_RETENTION_DAYS: ${UPLOADED_DECKLIST_RETENTION_DAYS:-7}
+      GENERATED_IMAGE_RETENTION_DAYS: ${GENERATED_IMAGE_RETENTION_DAYS:-7}
+      IMAGE_CLEANUP_INTERVAL_SECONDS: ${IMAGE_CLEANUP_INTERVAL_SECONDS:-604800}
     volumes:
       - yugideck_image_data:/data/images
     depends_on:
