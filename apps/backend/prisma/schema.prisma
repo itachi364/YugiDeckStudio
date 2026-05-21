@@ -1,0 +1,322 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DeckSection {
+  MAIN
+  EXTRA
+  SIDE
+}
+
+enum ExtractionStatus {
+  PENDING
+  EXTRACTED
+  FAILED
+}
+
+enum ReviewStatus {
+  PENDING
+  CONFIRMED
+}
+
+enum DeckStatus {
+  UPLOADED
+  EXTRACTED
+  REVIEWED
+  IMAGE_GENERATED
+  INACTIVE
+}
+
+enum ResolutionStatus {
+  UNRESOLVED
+  RESOLVED
+  AMBIGUOUS
+}
+
+enum ImageAssetCategory {
+  UPLOADED_DECKLIST
+  GENERATED_DECK_IMAGE
+  CARD_IMAGE
+  STORE_LOGO
+  EVENT_LOGO
+  SOCIAL_LOGO
+  BACKGROUND_IMAGE
+}
+
+enum RetentionPolicy {
+  TEMPORARY_CLEANUP_ALLOWED
+  PERMANENT
+}
+
+model Store {
+  id                     String            @id @default(uuid())
+  name                   String
+  primaryLogoAssetId     String?
+  secondaryLogoAssetId   String?
+  backgroundImageAssetId String?
+  backgroundColor        String?
+  sourceCreditText       String?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  primaryLogoAsset       ManagedImageAsset? @relation("StorePrimaryLogo", fields: [primaryLogoAssetId], references: [id])
+  secondaryLogoAsset     ManagedImageAsset? @relation("StoreSecondaryLogo", fields: [secondaryLogoAssetId], references: [id])
+  backgroundImageAsset   ManagedImageAsset? @relation("StoreBackground", fields: [backgroundImageAssetId], references: [id])
+  socialLinks            StoreSocialLink[]
+  eventTypes             EventType[]
+  tournamentTypes        TournamentType[]
+  tournaments            Tournament[]
+  decks                  Deck[]
+  users                  User[]
+}
+
+model StoreSocialLink {
+  id           String   @id @default(uuid())
+  storeId      String
+  platform     String
+  handle       String
+  url          String?
+  iconAssetId  String?
+  displayOrder Int      @default(0)
+  isActive     Boolean  @default(true)
+
+  store        Store    @relation(fields: [storeId], references: [id])
+  iconAsset    ManagedImageAsset? @relation("SocialIcon", fields: [iconAssetId], references: [id])
+
+  @@index([storeId])
+}
+
+model EventType {
+  id          String   @id @default(uuid())
+  storeId     String
+  name        String
+  description String?
+  logoAssetId String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  store       Store    @relation(fields: [storeId], references: [id])
+  logoAsset   ManagedImageAsset? @relation("EventLogo", fields: [logoAssetId], references: [id])
+  tournaments Tournament[]
+
+  @@unique([storeId, name])
+}
+
+model TournamentType {
+  id          String   @id @default(uuid())
+  storeId     String
+  name        String
+  description String?
+  logoAssetId String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  store       Store    @relation(fields: [storeId], references: [id])
+  logoAsset   ManagedImageAsset? @relation("TournamentTypeLogo", fields: [logoAssetId], references: [id])
+  tournaments Tournament[]
+
+  @@unique([storeId, name])
+}
+
+model User {
+  id                 String   @id @default(uuid())
+  storeId            String?
+  username           String   @unique
+  email              String?  @unique
+  passwordHash       String
+  displayName        String
+  isRoot             Boolean  @default(false)
+  mustChangePassword Boolean  @default(false)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  store              Store?   @relation(fields: [storeId], references: [id])
+  userRoles          UserRole[]
+  inactiveDecks      Deck[]   @relation("DeckInactivatedBy")
+
+  @@index([storeId])
+}
+
+model Role {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  description  String?
+  isSystemRole Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+}
+
+model UserRole {
+  userId String
+  roleId String
+
+  user   User @relation(fields: [userId], references: [id])
+  role   Role @relation(fields: [roleId], references: [id])
+
+  @@id([userId, roleId])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+}
+
+model Player {
+  id          String   @id @default(uuid())
+  displayName String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  decks       Deck[]
+}
+
+model Tournament {
+  id               String   @id @default(uuid())
+  storeId          String
+  eventTypeId      String?
+  tournamentTypeId String?
+  name             String?
+  eventDate        DateTime
+  location         String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  store          Store           @relation(fields: [storeId], references: [id])
+  eventType      EventType?      @relation(fields: [eventTypeId], references: [id])
+  tournamentType TournamentType? @relation(fields: [tournamentTypeId], references: [id])
+  decks          Deck[]
+
+  @@index([storeId])
+}
+
+model Deck {
+  id                   String           @id @default(uuid())
+  playerId             String
+  tournamentId         String
+  storeId              String
+  deckName             String
+  resultLabel          String
+  uploadedImageAssetId String
+  extractionStatus     ExtractionStatus @default(PENDING)
+  reviewStatus         ReviewStatus     @default(PENDING)
+  status               DeckStatus       @default(UPLOADED)
+  inactiveAt           DateTime?
+  inactiveByUserId     String?
+  inactivityReason     String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  player             Player            @relation(fields: [playerId], references: [id])
+  tournament         Tournament        @relation(fields: [tournamentId], references: [id])
+  store              Store             @relation(fields: [storeId], references: [id])
+  uploadedImageAsset ManagedImageAsset  @relation("UploadedDeckList", fields: [uploadedImageAssetId], references: [id])
+  inactiveByUser     User?             @relation("DeckInactivatedBy", fields: [inactiveByUserId], references: [id])
+  deckCards          DeckCard[]
+  generatedImages    GeneratedDeckImage[]
+
+  @@index([storeId])
+  @@index([status])
+}
+
+model DeckCard {
+  id                  String           @id @default(uuid())
+  deckId              String
+  section             DeckSection
+  quantity            Int
+  originalName        String
+  resolvedEnglishName String?
+  cardId              String?
+  confidenceScore     Float?
+  resolutionStatus    ResolutionStatus @default(UNRESOLVED)
+  displayOrder        Int              @default(0)
+
+  deck Deck  @relation(fields: [deckId], references: [id])
+  card Card? @relation(fields: [cardId], references: [id])
+
+  @@index([deckId, section])
+}
+
+model Card {
+  id             String   @id @default(uuid())
+  ygoprodeckId   Int      @unique
+  officialName   String   @unique
+  cardType       String?
+  frameType      String?
+  imageAssetId   String?
+  imageUrlSource String?
+  rawPayloadJson Json?
+  lastUsedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  imageAsset ManagedImageAsset? @relation("CardImage", fields: [imageAssetId], references: [id])
+  deckCards  DeckCard[]
+}
+
+model GeneratedDeckImage {
+  id          String   @id @default(uuid())
+  deckId      String
+  imageAssetId String
+  templateName String
+  width       Int
+  height      Int
+  createdAt   DateTime @default(now())
+
+  deck       Deck              @relation(fields: [deckId], references: [id])
+  imageAsset ManagedImageAsset @relation("GeneratedDeckImage", fields: [imageAssetId], references: [id])
+}
+
+model ManagedImageAsset {
+  id              String             @id @default(uuid())
+  category        ImageAssetCategory
+  storagePath     String             @unique
+  originalFilename String?
+  mimeType        String
+  sizeBytes       Int
+  checksum        String
+  width           Int?
+  height          Int?
+  retentionPolicy RetentionPolicy
+  lastUsedAt      DateTime?
+  createdAt       DateTime           @default(now())
+  deletedAt       DateTime?
+
+  storePrimaryLogos     Store[]              @relation("StorePrimaryLogo")
+  storeSecondaryLogos   Store[]              @relation("StoreSecondaryLogo")
+  storeBackgrounds      Store[]              @relation("StoreBackground")
+  socialIcons           StoreSocialLink[]    @relation("SocialIcon")
+  eventLogos            EventType[]          @relation("EventLogo")
+  tournamentTypeLogos   TournamentType[]     @relation("TournamentTypeLogo")
+  uploadedDecks         Deck[]               @relation("UploadedDeckList")
+  cardImages            Card[]               @relation("CardImage")
+  generatedDeckImages   GeneratedDeckImage[] @relation("GeneratedDeckImage")
+
+  @@index([category])
+  @@index([retentionPolicy])
+}

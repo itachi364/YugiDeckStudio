@@ -2,7 +2,7 @@
 
 ## Fase 1: Especificación y configuración del proyecto
 
-- [ ] TASK-001: Revisar y aprobar documentos SDD.
+- [x] TASK-001: Revisar y aprobar documentos SDD.
   - Archivos:
     - `specs/requirements.md`
     - `specs/design.md`
@@ -12,7 +12,7 @@
   - Criterios de finalización:
     - El usuario aprueba las especificaciones.
 
-- [ ] TASK-002: Crear repositorio GitHub después de aprobar SDD.
+- [x] TASK-002: Crear repositorio GitHub después de aprobar SDD.
   - Criterios de aceptación:
     - Repositorio público `YugiDeckStudio` confirmado.
     - Rama base `master` confirmada.
@@ -20,7 +20,7 @@
   - Criterios de finalización:
     - Repositorio GitHub creado solo después de confirmación explícita.
 
-- [ ] TASK-003: Crear estructura de proyecto para backend Clean/Hexagonal y frontend modular.
+- [x] TASK-003: Crear estructura de proyecto para backend Clean/Hexagonal y frontend modular.
   - Archivos:
     - Proyecto backend NestJS + TypeScript.
     - Proyecto frontend React + Vite + TypeScript.
@@ -31,7 +31,7 @@
 
 ## Fase 2: Infraestructura local
 
-- [ ] TASK-004: Generar configuración Docker Compose local.
+- [x] TASK-004: Generar configuración Docker Compose local.
   - Archivos:
     - `Dockerfile` según stack seleccionado.
     - `docker-compose.yml`.
@@ -47,13 +47,13 @@
     - Servicios sin secretos hardcodeados.
     - Sin configuración de despliegue a internet.
 
-- [ ] TASK-005: Generar esquema Prisma y migraciones.
+- [x] TASK-005: Generar esquema Prisma y migraciones.
   - Criterios de aceptación:
     - AC-032.
   - Criterios de finalización:
     - El esquema soporta tiendas, usuarios, roles, permisos, redes, eventos, torneos, decks, cartas, assets e imágenes generadas.
 
-- [ ] TASK-006: Diseñar almacenamiento local de imágenes.
+- [x] TASK-006: Diseñar almacenamiento local de imágenes.
   - Criterios de aceptación:
     - AC-008.
     - AC-033.
@@ -286,14 +286,14 @@
 
 ## Fase 5: Documentación y verificación
 
-- [ ] TASK-028: Generar o actualizar README.
+- [x] TASK-028: Generar o actualizar README.
   - Criterios de aceptación:
     - Definición de terminado SDD.
   - Criterios de finalización:
     - Setup local, comandos Docker, comandos de prueba, variables de entorno, volúmenes locales y arquitectura documentados.
     - El README debe indicar explícitamente que `v0.1.0` no incluye despliegue a internet.
 
-- [ ] TASK-029: Ejecutar pruebas y verificar criterios de aceptación.
+- [x] TASK-029: Ejecutar pruebas y verificar criterios de aceptación.
   - Criterios de aceptación:
     - AC-036.
   - Criterios de finalización:

@@ -1,0 +1,29 @@
+{
+  "name": "yugideckstudio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first Yu-Gi-Oh! deck image generator using OCR, YGOPRODeck, Docker and PostgreSQL.",
+  "workspaces": [
+    "apps/backend",
+    "apps/frontend",
+    "packages/shared"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "format": "npm run format --workspaces --if-present",
+    "dev:backend": "npm run start:dev --workspace @yugideckstudio/backend",
+    "dev:frontend": "npm run dev --workspace @yugideckstudio/frontend",
+    "prisma:generate": "npm run prisma:generate --workspace @yugideckstudio/backend",
+    "prisma:migrate": "npm run prisma:migrate --workspace @yugideckstudio/backend",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "docker:ps": "docker compose ps"
+  },
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=11.0.0"
+  }
+}

@@ -1,0 +1,80 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: yugideckstudio-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-yugideckstudio}
+      POSTGRES_USER: ${POSTGRES_USER:-yugideck}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-yugideck_local_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - yugideck_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-yugideck} -d ${POSTGRES_DB:-yugideckstudio}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - yugideck_local
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    container_name: yugideckstudio-backend
+    restart: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      PORT: 3000
+      DATABASE_URL: ${DATABASE_URL:-postgresql://yugideck:yugideck_local_password@postgres:5432/yugideckstudio?schema=public}
+      JWT_SECRET: ${JWT_SECRET:-replace_with_a_local_secret}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
+      ROOT_DEFAULT_USERNAME: ${ROOT_DEFAULT_USERNAME:-root}
+      ROOT_DEFAULT_PASSWORD: ${ROOT_DEFAULT_PASSWORD:-ChangeMe123!}
+      ROOT_MUST_CHANGE_PASSWORD: ${ROOT_MUST_CHANGE_PASSWORD:-true}
+      IMAGE_STORAGE_PATH: ${IMAGE_STORAGE_PATH:-/data/images}
+      YGOPRODECK_API_BASE_URL: ${YGOPRODECK_API_BASE_URL:-https://db.ygoprodeck.com/api/v7}
+      YGOPRODECK_RATE_LIMIT_PER_SECOND: ${YGOPRODECK_RATE_LIMIT_PER_SECOND:-20}
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    volumes:
+      - yugideck_image_data:/data/images
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - yugideck_local
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+    container_name: yugideckstudio-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-5173}:8080"
+    depends_on:
+      - backend
+    networks:
+      - yugideck_local
+
+  image-storage:
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    container_name: yugideckstudio-image-storage
+    restart: unless-stopped
+    ports:
+      - "${IMAGE_STORAGE_PORT:-8081}:8080"
+    volumes:
+      - yugideck_image_data:/usr/share/nginx/html:ro
+    networks:
+      - yugideck_local
+
+volumes:
+  yugideck_postgres_data:
+  yugideck_image_data:
+
+networks:
+  yugideck_local:
+    driver: bridge
