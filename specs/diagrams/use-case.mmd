@@ -1,0 +1,26 @@
+# Diagrama de casos de uso
+
+```mermaid
+flowchart LR
+    StoreAdmin[Administrador de tienda]
+    Operator[Operador de torneo]
+    Viewer[Visualizador]
+
+    UC1((Configurar branding))
+    UC2((Subir imagen de deck list))
+    UC3((Ingresar metadatos del torneo))
+    UC4((Revisar cartas extraídas))
+    UC5((Generar imagen del deck))
+    UC6((Previsualizar imagen del deck))
+    UC7((Descargar imagen del deck))
+
+    StoreAdmin --> UC1
+    Operator --> UC2
+    Operator --> UC3
+    Operator --> UC4
+    Operator --> UC5
+    Operator --> UC6
+    Viewer --> UC6
+    Operator --> UC7
+    Viewer --> UC7
+```

@@ -1,0 +1,40 @@
+# Diagrama de componentes
+
+```mermaid
+flowchart TB
+    subgraph Cliente
+        FE[Aplicación web frontend]
+    end
+
+    subgraph Backend
+        API[Controladores HTTP API]
+        APP[Casos de uso de aplicación]
+        DOMAIN[Modelo de dominio]
+        PORTS[Puertos]
+    end
+
+    subgraph Adaptadores
+        OCR[Adaptador OCR]
+        YGO[Adaptador YGOPRODeck]
+        RENDER[Adaptador de renderizado de imagen]
+        STORAGE[Adaptador de almacenamiento de archivos e imágenes]
+        REPOS[Repositorios PostgreSQL]
+    end
+
+    DB[(PostgreSQL)]
+    EXT_YGO[API YGOPRODeck]
+    EXT_OCR[Proveedor o librería OCR]
+
+    FE --> API
+    API --> APP
+    APP --> DOMAIN
+    APP --> PORTS
+    PORTS --> OCR
+    PORTS --> YGO
+    PORTS --> RENDER
+    PORTS --> STORAGE
+    PORTS --> REPOS
+    REPOS --> DB
+    YGO --> EXT_YGO
+    OCR --> EXT_OCR
+```
