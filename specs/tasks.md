@@ -77,7 +77,7 @@
 
 ## Fase 3: Backend
 
-- [ ] TASK-008: Implementar caso de uso de carga de deck.
+- [x] TASK-008: Implementar caso de uso de carga de deck.
   - Criterios de aceptación:
     - AC-001.
     - AC-002.
@@ -85,6 +85,11 @@
   - Pruebas:
     - Validación de metadatos.
     - Bloqueo de reemplazo de deck list.
+  - Criterios de finalización:
+    - Contrato `POST /api/decks/uploads` documentado.
+    - Endpoint multipart implementado.
+    - Imagen de deck list almacenada localmente como asset temporal.
+    - Deck inicial persistido en estado `UPLOADED`.
 
 - [ ] TASK-009: Implementar puerto OCR y flujo de extracción.
   - Criterios de aceptación:
