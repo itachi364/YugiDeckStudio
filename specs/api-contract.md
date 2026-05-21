@@ -69,3 +69,43 @@ Reglas:
 - Debe persistir `Player`, `Tournament` y `Deck`.
 - No debe existir un endpoint de reemplazo de imagen para el mismo deck.
 - Si un caso de uso intenta cargar una nueva imagen para un deck que ya tiene `uploadedImageAssetId`, debe rechazarse con `409 Conflict`.
+
+## 3. Extraer deck list por OCR
+
+### `POST /api/decks/{deckId}/extract`
+
+Ejecuta OCR sobre la imagen de deck list subida y persiste las cartas extraidas por seccion.
+
+Parametros de ruta:
+
+| Campo | Tipo | Reglas |
+| --- | --- | --- |
+| `deckId` | string | Debe existir en base de datos. |
+
+Respuesta exitosa `200 OK`:
+
+```json
+{
+  "deckId": "uuid",
+  "status": "EXTRACTED",
+  "extractionStatus": "EXTRACTED",
+  "rawOcrText": "texto original del OCR",
+  "cards": [
+    {
+      "section": "MAIN",
+      "quantity": 3,
+      "originalName": "Silvy del Bosque Blanco",
+      "displayOrder": 1
+    }
+  ]
+}
+```
+
+Reglas:
+
+- Debe leer la imagen desde el asset `UPLOADED_DECKLIST` asociado al deck.
+- Debe conservar el texto original del OCR en `rawOcrText`.
+- Debe detectar cartas de `MAIN`, `EXTRA` y `SIDE`.
+- Debe persistir cantidad, nombre original, seccion y orden visual.
+- Si el deck ya tiene cartas extraidas, debe rechazar la operacion con `409 Conflict`.
+- Si no se detecta ninguna carta, debe marcar la extraccion como `FAILED` y devolver `400 Bad Request`.

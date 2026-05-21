@@ -33,6 +33,10 @@ export class LocalImageStorageService {
     await rm(this.resolveInsideStorage(storagePath), { force: true });
   }
 
+  resolveStoragePath(storagePath: string): string {
+    return this.resolveInsideStorage(storagePath);
+  }
+
   private extensionForMimeType(mimeType: string): string {
     const extensions: Record<string, string> = {
       "image/jpeg": ".jpg",

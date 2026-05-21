@@ -91,13 +91,19 @@
     - Imagen de deck list almacenada localmente como asset temporal.
     - Deck inicial persistido en estado `UPLOADED`.
 
-- [ ] TASK-009: Implementar puerto OCR y flujo de extracción.
+- [x] TASK-009: Implementar puerto OCR y flujo de extracción.
   - Criterios de aceptación:
     - AC-003.
   - Pruebas:
     - Parsing de secciones.
     - Extracción de cantidades y nombres.
     - Adaptador Tesseract OCR con salida mockeada.
+  - Criterios de finalización:
+    - Contrato `POST /api/decks/{deckId}/extract` documentado.
+    - `OcrPort` y adaptador Tesseract implementados.
+    - Parser de secciones `MAIN`, `EXTRA` y `SIDE` implementado.
+    - Texto OCR original persistido en `Deck.rawOcrText`.
+    - Cartas extraídas persistidas como `DeckCard`.
 
 - [ ] TASK-010: Implementar revisión y corrección obligatoria.
   - Criterios de aceptación:

@@ -1,5 +1,7 @@
-import { BadRequestException, Body, Controller, Post, UploadedFile, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Param, Post, UploadedFile, UseInterceptors } from "@nestjs/common";
+import { ParseUUIDPipe } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
+import { ExtractDeckListFromImageUseCase } from "./application/extract-deck-list.use-case";
 import { UploadDeckListUseCase } from "./application/upload-deck-list.use-case";
 import { UploadDeckListDto } from "./dto/upload-deck-list.dto";
 
@@ -12,7 +14,10 @@ interface UploadedDeckListFile {
 
 @Controller("api/decks")
 export class DecksController {
-  constructor(private readonly uploadDeckListUseCase: UploadDeckListUseCase) {}
+  constructor(
+    private readonly uploadDeckListUseCase: UploadDeckListUseCase,
+    private readonly extractDeckListFromImageUseCase: ExtractDeckListFromImageUseCase
+  ) {}
 
   @Post("uploads")
   @UseInterceptors(FileInterceptor("deckListImage"))
@@ -25,5 +30,10 @@ export class DecksController {
       ...body,
       file
     });
+  }
+
+  @Post(":deckId/extract")
+  extractDeckList(@Param("deckId", ParseUUIDPipe) deckId: string) {
+    return this.extractDeckListFromImageUseCase.execute(deckId);
   }
 }

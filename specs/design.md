@@ -288,6 +288,7 @@ Las entidades con alcance de tienda incluyen:
 - deck_name.
 - result_label.
 - uploaded_image_asset_id.
+- raw_ocr_text.
 - extraction_status.
 - review_status.
 - status.
