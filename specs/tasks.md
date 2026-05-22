@@ -274,11 +274,17 @@
     - Soft delete con `status = INACTIVE` implementado.
     - Eliminación física de deck list e imágenes generadas implementada.
 
-- [ ] TASK-020: Implementar repositorios de persistencia.
+- [x] TASK-020: Implementar repositorios de persistencia.
   - Criterios de aceptación:
     - AC-032.
   - Pruebas:
     - Repositorios Prisma según casos de uso.
+  - Criterios de finalización:
+    - Puerto `DeckPersistenceRepository` implementado.
+    - Adaptador Prisma `PostgresDeckPersistenceRepository` implementado.
+    - `DeckReviewPolicyService` desacoplado de acceso directo a Prisma.
+    - `InactivateDeckUseCase` desacoplado de acceso directo a Prisma.
+    - Pruebas de repositorio y casos de uso actualizadas.
 
 ## Fase 4: Frontend
 

@@ -3,17 +3,13 @@ import { DeckStatus } from "@prisma/client";
 import { InactivateDeckUseCase } from "../src/modules/decks/application/inactivate-deck.use-case";
 
 describe("InactivateDeckUseCase", () => {
-  const findDeck = jest.fn();
-  const transaction = jest.fn();
-  const updateAssets = jest.fn();
-  const updateDeck = jest.fn();
+  const findInactivationSnapshot = jest.fn();
+  const markDeckInactive = jest.fn();
   const removeImage = jest.fn();
   const useCase = new InactivateDeckUseCase(
     {
-      deck: {
-        findUnique: findDeck
-      },
-      $transaction: transaction
+      findInactivationSnapshot,
+      markDeckInactive
     } as never,
     {
       remove: removeImage
@@ -31,7 +27,7 @@ describe("InactivateDeckUseCase", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    findDeck.mockResolvedValue({
+    findInactivationSnapshot.mockResolvedValue({
       id: "deck-id",
       status: DeckStatus.IMAGE_GENERATED,
       uploadedImageAsset: {
@@ -39,35 +35,20 @@ describe("InactivateDeckUseCase", () => {
         storagePath: "uploaded-decklists/deck.png",
         deletedAt: null
       },
-      generatedImages: [
+      generatedImageAssets: [
         {
-          imageAsset: {
-            id: "generated-asset-id",
-            storagePath: "generated-deck-images/deck.png",
-            deletedAt: null
-          }
+          id: "generated-asset-id",
+          storagePath: "generated-deck-images/deck.png",
+          deletedAt: null
         }
       ]
     });
-    updateAssets.mockResolvedValue({
-      count: 2
-    });
-    updateDeck.mockResolvedValue({
+    markDeckInactive.mockResolvedValue({
       id: "deck-id",
       status: DeckStatus.INACTIVE,
       inactiveByUserId: "admin-id",
       inactivityReason: "Correccion solicitada"
     });
-    transaction.mockImplementation((callback) =>
-      callback({
-        managedImageAsset: {
-          updateMany: updateAssets
-        },
-        deck: {
-          update: updateDeck
-        }
-      })
-    );
   });
 
   it("soft deletes the deck and removes uploaded/generated images for store admins", async () => {
@@ -77,32 +58,12 @@ describe("InactivateDeckUseCase", () => {
       reason: " Correccion solicitada "
     });
 
-    expect(updateAssets).toHaveBeenCalledWith({
-      where: {
-        id: {
-          in: ["uploaded-asset-id", "generated-asset-id"]
-        }
-      },
-      data: {
-        deletedAt: expect.any(Date)
-      }
-    });
-    expect(updateDeck).toHaveBeenCalledWith({
-      where: {
-        id: "deck-id"
-      },
-      data: {
-        status: DeckStatus.INACTIVE,
-        inactiveAt: expect.any(Date),
-        inactiveByUserId: "admin-id",
-        inactivityReason: "Correccion solicitada"
-      },
-      select: {
-        id: true,
-        status: true,
-        inactiveByUserId: true,
-        inactivityReason: true
-      }
+    expect(markDeckInactive).toHaveBeenCalledWith({
+      deckId: "deck-id",
+      inactiveAt: expect.any(Date),
+      inactiveByUserId: "admin-id",
+      inactivityReason: "Correccion solicitada",
+      removableAssetIds: ["uploaded-asset-id", "generated-asset-id"]
     });
     expect(removeImage).toHaveBeenCalledWith("uploaded-decklists/deck.png");
     expect(removeImage).toHaveBeenCalledWith("generated-deck-images/deck.png");
@@ -146,7 +107,7 @@ describe("InactivateDeckUseCase", () => {
   });
 
   it("blocks inactivation before an image is generated", async () => {
-    findDeck.mockResolvedValue({
+    findInactivationSnapshot.mockResolvedValue({
       id: "deck-id",
       status: DeckStatus.REVIEWED,
       uploadedImageAsset: {
@@ -154,7 +115,7 @@ describe("InactivateDeckUseCase", () => {
         storagePath: "uploaded-decklists/deck.png",
         deletedAt: null
       },
-      generatedImages: []
+      generatedImageAssets: []
     });
 
     await expect(

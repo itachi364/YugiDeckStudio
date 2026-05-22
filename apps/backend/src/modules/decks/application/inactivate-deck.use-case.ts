@@ -1,9 +1,13 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { DeckStatus } from "@prisma/client";
-import { PrismaService } from "../../../infrastructure/prisma/prisma.service";
 import { SYSTEM_ROLES } from "../../auth/domain/system-roles";
 import { AuthenticatedUserPayload } from "../../auth/ports/auth-token.port";
 import { LocalImageStorageService } from "../infrastructure/local-image-storage.service";
+import {
+  DECK_PERSISTENCE_REPOSITORY,
+  DeckPersistenceRepository,
+  ManagedAssetReference
+} from "../ports/deck-persistence.repository";
 
 export interface InactivateDeckInput {
   deckId: string;
@@ -19,49 +23,17 @@ export interface InactivateDeckResult {
   removedImageStoragePaths: string[];
 }
 
-interface ManagedAssetReference {
-  id: string;
-  storagePath: string;
-  deletedAt: Date | null;
-}
-
 @Injectable()
 export class InactivateDeckUseCase {
   constructor(
-    private readonly prisma: PrismaService,
+    @Inject(DECK_PERSISTENCE_REPOSITORY) private readonly deckRepository: DeckPersistenceRepository,
     private readonly imageStorage: LocalImageStorageService
   ) {}
 
   async execute(input: InactivateDeckInput): Promise<InactivateDeckResult> {
     this.assertCanInactivate(input.user);
 
-    const deck = await this.prisma.deck.findUnique({
-      where: {
-        id: input.deckId
-      },
-      select: {
-        id: true,
-        status: true,
-        uploadedImageAsset: {
-          select: {
-            id: true,
-            storagePath: true,
-            deletedAt: true
-          }
-        },
-        generatedImages: {
-          select: {
-            imageAsset: {
-              select: {
-                id: true,
-                storagePath: true,
-                deletedAt: true
-              }
-            }
-          }
-        }
-      }
-    });
+    const deck = await this.deckRepository.findInactivationSnapshot(input.deckId);
 
     if (!deck) {
       throw new NotFoundException("El deck indicado no existe.");
@@ -77,40 +49,17 @@ export class InactivateDeckUseCase {
 
     const removableAssets = this.collectRemovableAssets(
       deck.uploadedImageAsset,
-      deck.generatedImages.map((generatedImage) => generatedImage.imageAsset)
+      deck.generatedImageAssets
     );
     const now = new Date();
     const reason = input.reason?.trim() || undefined;
 
-    const updatedDeck = await this.prisma.$transaction(async (transaction) => {
-      await transaction.managedImageAsset.updateMany({
-        where: {
-          id: {
-            in: removableAssets.map((asset) => asset.id)
-          }
-        },
-        data: {
-          deletedAt: now
-        }
-      });
-
-      return transaction.deck.update({
-        where: {
-          id: input.deckId
-        },
-        data: {
-          status: DeckStatus.INACTIVE,
-          inactiveAt: now,
-          inactiveByUserId: input.user.sub,
-          inactivityReason: reason
-        },
-        select: {
-          id: true,
-          status: true,
-          inactiveByUserId: true,
-          inactivityReason: true
-        }
-      });
+    const updatedDeck = await this.deckRepository.markDeckInactive({
+      deckId: input.deckId,
+      inactiveAt: now,
+      inactiveByUserId: input.user.sub,
+      inactivityReason: reason,
+      removableAssetIds: removableAssets.map((asset) => asset.id)
     });
 
     for (const asset of removableAssets) {

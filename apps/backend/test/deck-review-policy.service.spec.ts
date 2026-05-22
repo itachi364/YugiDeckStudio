@@ -3,11 +3,9 @@ import { ReviewStatus } from "@prisma/client";
 import { DeckReviewPolicyService } from "../src/modules/decks/application/deck-review-policy.service";
 
 describe("DeckReviewPolicyService", () => {
-  const findDeck = jest.fn();
+  const findReviewSnapshot = jest.fn();
   const service = new DeckReviewPolicyService({
-    deck: {
-      findUnique: findDeck
-    }
+    findReviewSnapshot
   } as never);
 
   beforeEach(() => {
@@ -15,7 +13,7 @@ describe("DeckReviewPolicyService", () => {
   });
 
   it("allows image generation when review is confirmed", async () => {
-    findDeck.mockResolvedValue({
+    findReviewSnapshot.mockResolvedValue({
       reviewStatus: ReviewStatus.CONFIRMED
     });
 
@@ -23,7 +21,7 @@ describe("DeckReviewPolicyService", () => {
   });
 
   it("blocks image generation when review is pending", async () => {
-    findDeck.mockResolvedValue({
+    findReviewSnapshot.mockResolvedValue({
       reviewStatus: ReviewStatus.PENDING
     });
 
@@ -31,7 +29,7 @@ describe("DeckReviewPolicyService", () => {
   });
 
   it("rejects missing deck", async () => {
-    findDeck.mockResolvedValue(null);
+    findReviewSnapshot.mockResolvedValue(null);
 
     await expect(service.assertCanGenerateImage("missing-deck")).rejects.toBeInstanceOf(NotFoundException);
   });

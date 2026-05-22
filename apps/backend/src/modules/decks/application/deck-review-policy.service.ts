@@ -1,20 +1,18 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { ReviewStatus } from "@prisma/client";
-import { PrismaService } from "../../../infrastructure/prisma/prisma.service";
+import {
+  DECK_PERSISTENCE_REPOSITORY,
+  DeckPersistenceRepository
+} from "../ports/deck-persistence.repository";
 
 @Injectable()
 export class DeckReviewPolicyService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(DECK_PERSISTENCE_REPOSITORY) private readonly deckRepository: DeckPersistenceRepository
+  ) {}
 
   async assertCanGenerateImage(deckId: string): Promise<void> {
-    const deck = await this.prisma.deck.findUnique({
-      where: {
-        id: deckId
-      },
-      select: {
-        reviewStatus: true
-      }
-    });
+    const deck = await this.deckRepository.findReviewSnapshot(deckId);
 
     if (!deck) {
       throw new NotFoundException("El deck indicado no existe.");

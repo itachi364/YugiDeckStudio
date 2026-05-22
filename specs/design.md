@@ -575,6 +575,25 @@ Implementación:
 - Los archivos físicos del deck list subido y de las imágenes generadas se eliminan del volumen local.
 - No se eliminan assets permanentes como cartas, logos, fondos o redes sociales.
 
+## 8.2.1 Diseño de repositorios de persistencia de deck
+
+Los casos de uso de deck no deben depender directamente de Prisma cuando la operación represente una regla de aplicación reutilizable.
+
+Para `v0.1.0`, `DeckPersistenceRepository` actúa como puerto de persistencia para operaciones críticas del ciclo de vida:
+
+- consultar el estado de revisión requerido antes de generar imágenes;
+- consultar el snapshot de inactivación del deck con sus assets temporales asociados;
+- marcar el deck como `INACTIVE` y marcar como eliminados los assets temporales relacionados.
+
+`PostgresDeckPersistenceRepository` implementa el puerto usando Prisma y PostgreSQL.
+
+Reglas:
+
+- `DeckReviewPolicyService` debe validar la revisión mediante el puerto de repositorio.
+- `InactivateDeckUseCase` debe inactivar decks mediante el puerto de repositorio.
+- La eliminación física de archivos permanece separada en el adaptador de almacenamiento local.
+- Las pruebas deben cubrir el contrato del repositorio y el desacoplamiento de los casos de uso.
+
 ## 8.3 Diseño de modo sin internet
 
 La integración con YGOPRODeck debe soportar fallo de conectividad.

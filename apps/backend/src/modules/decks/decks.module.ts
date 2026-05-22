@@ -16,10 +16,12 @@ import { DeckListParser } from "./domain/deck-list-parser";
 import { LocalCardImageStorageAdapter } from "./infrastructure/local-card-image-storage.adapter";
 import { LocalImageStorageService } from "./infrastructure/local-image-storage.service";
 import { NodeCanvasDeckImageRendererAdapter } from "./infrastructure/node-canvas-deck-image-renderer.adapter";
+import { PostgresDeckPersistenceRepository } from "./infrastructure/postgres-deck-persistence.repository";
 import { TesseractOcrAdapter } from "./infrastructure/tesseract-ocr.adapter";
 import { YgoprodeckCardCatalogAdapter } from "./infrastructure/ygoprodeck-card-catalog.adapter";
 import { CARD_IMAGE_STORAGE_PORT } from "./ports/card-image-storage.port";
 import { CARD_NAME_RESOLVER_PORT } from "./ports/card-name-resolver.port";
+import { DECK_PERSISTENCE_REPOSITORY } from "./ports/deck-persistence.repository";
 import { DECK_IMAGE_RENDERER_PORT } from "./ports/deck-image-renderer.port";
 import { OCR_PORT } from "./ports/ocr.port";
 
@@ -54,6 +56,10 @@ import { OCR_PORT } from "./ports/ocr.port";
     {
       provide: DECK_IMAGE_RENDERER_PORT,
       useClass: NodeCanvasDeckImageRendererAdapter
+    },
+    {
+      provide: DECK_PERSISTENCE_REPOSITORY,
+      useClass: PostgresDeckPersistenceRepository
     }
   ]
 })
