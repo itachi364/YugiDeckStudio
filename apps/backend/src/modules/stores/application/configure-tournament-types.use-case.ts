@@ -32,7 +32,7 @@ export class ConfigureTournamentTypesUseCase {
 
   async create(input: ConfigureTournamentTypeInput) {
     await this.assertStoreExists(input.storeId);
-    await this.assetPolicy.assertAssetCategory(input.logoAssetId, ImageAssetCategory.EVENT_LOGO);
+    await this.assetPolicy.assertAssetCategory(input.logoAssetId, ImageAssetCategory.EVENT_LOGO, input.storeId);
 
     return this.prisma.tournamentType.create({
       data: {
@@ -60,7 +60,7 @@ export class ConfigureTournamentTypesUseCase {
       throw new NotFoundException("El tipo de torneo indicado no existe para la tienda.");
     }
 
-    await this.assetPolicy.assertAssetCategory(input.logoAssetId, ImageAssetCategory.EVENT_LOGO);
+    await this.assetPolicy.assertAssetCategory(input.logoAssetId, ImageAssetCategory.EVENT_LOGO, input.storeId);
 
     return this.prisma.tournamentType.update({
       where: {

@@ -44,9 +44,9 @@ describe("UpdateStoreConfigurationUseCase", () => {
       sourceCreditText: "ReadyForDuel"
     });
 
-    expect(assertAssetCategory).toHaveBeenCalledWith("logo-1", ImageAssetCategory.STORE_LOGO);
-    expect(assertAssetCategory).toHaveBeenCalledWith(undefined, ImageAssetCategory.STORE_LOGO);
-    expect(assertAssetCategory).toHaveBeenCalledWith("background-1", ImageAssetCategory.BACKGROUND_IMAGE);
+    expect(assertAssetCategory).toHaveBeenCalledWith("logo-1", ImageAssetCategory.STORE_LOGO, "store-id");
+    expect(assertAssetCategory).toHaveBeenCalledWith(undefined, ImageAssetCategory.STORE_LOGO, "store-id");
+    expect(assertAssetCategory).toHaveBeenCalledWith("background-1", ImageAssetCategory.BACKGROUND_IMAGE, "store-id");
     expect(updateStore).toHaveBeenCalledWith({
       where: {
         id: "store-id"

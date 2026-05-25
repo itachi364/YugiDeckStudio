@@ -1,10 +1,15 @@
-import { BadRequestException, Body, Controller, Get, Param, ParseUUIDPipe, Post, Put, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Put, Query, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
+import { ImageAssetCategory } from "@prisma/client";
+import { CurrentUser } from "../auth/infrastructure/current-user.decorator";
 import { JwtAuthGuard } from "../auth/infrastructure/jwt-auth.guard";
 import { StoreScopeGuard } from "../auth/infrastructure/store-scope.guard";
+import { AuthenticatedUserPayload } from "../auth/ports/auth-token.port";
 import { ConfigureEventTypesUseCase } from "./application/configure-event-types.use-case";
 import { ConfigureTournamentTypesUseCase } from "./application/configure-tournament-types.use-case";
 import { GetStoreConfigurationUseCase } from "./application/get-store-configuration.use-case";
+import { ListStoreAssetsUseCase } from "./application/list-store-assets.use-case";
+import { ListVisibleStoresUseCase } from "./application/list-visible-stores.use-case";
 import { ReplaceStoreSocialLinksUseCase } from "./application/replace-store-social-links.use-case";
 import { UpdateStoreConfigurationUseCase } from "./application/update-store-configuration.use-case";
 import { UploadStoreAssetUseCase } from "./application/upload-store-asset.use-case";
@@ -22,7 +27,7 @@ interface UploadedStoreAssetFile {
 }
 
 @Controller("api/stores")
-@UseGuards(JwtAuthGuard, StoreScopeGuard)
+@UseGuards(JwtAuthGuard)
 export class StoresController {
   constructor(
     private readonly getStoreConfigurationUseCase: GetStoreConfigurationUseCase,
@@ -30,15 +35,29 @@ export class StoresController {
     private readonly uploadStoreAssetUseCase: UploadStoreAssetUseCase,
     private readonly configureEventTypesUseCase: ConfigureEventTypesUseCase,
     private readonly configureTournamentTypesUseCase: ConfigureTournamentTypesUseCase,
-    private readonly replaceStoreSocialLinksUseCase: ReplaceStoreSocialLinksUseCase
+    private readonly replaceStoreSocialLinksUseCase: ReplaceStoreSocialLinksUseCase,
+    private readonly listVisibleStoresUseCase: ListVisibleStoresUseCase,
+    private readonly listStoreAssetsUseCase: ListStoreAssetsUseCase
   ) {}
 
+  @Get()
+  listVisibleStores(@CurrentUser() user: AuthenticatedUserPayload) {
+    return this.listVisibleStoresUseCase.execute(user);
+  }
+
+  @Get("event-types")
+  listVisibleEventTypes(@CurrentUser() user: AuthenticatedUserPayload) {
+    return this.configureEventTypesUseCase.listVisibleForUser(user);
+  }
+
   @Get(":storeId")
+  @UseGuards(StoreScopeGuard)
   getStoreConfiguration(@Param("storeId", ParseUUIDPipe) storeId: string) {
     return this.getStoreConfigurationUseCase.execute(storeId);
   }
 
   @Put(":storeId")
+  @UseGuards(StoreScopeGuard)
   updateStoreConfiguration(
     @Param("storeId", ParseUUIDPipe) storeId: string,
     @Body() body: UpdateStoreConfigurationDto
@@ -49,7 +68,20 @@ export class StoresController {
     });
   }
 
+  @Get(":storeId/assets")
+  @UseGuards(StoreScopeGuard)
+  listStoreAssets(
+    @Param("storeId", ParseUUIDPipe) storeId: string,
+    @Query("category") category?: ImageAssetCategory
+  ) {
+    return this.listStoreAssetsUseCase.execute({
+      storeId,
+      category
+    });
+  }
+
   @Post(":storeId/assets")
+  @UseGuards(StoreScopeGuard)
   @UseInterceptors(FileInterceptor("image"))
   uploadStoreAsset(
     @Param("storeId", ParseUUIDPipe) storeId: string,
@@ -68,11 +100,13 @@ export class StoresController {
   }
 
   @Get(":storeId/event-types")
+  @UseGuards(StoreScopeGuard)
   listEventTypes(@Param("storeId", ParseUUIDPipe) storeId: string) {
     return this.configureEventTypesUseCase.list(storeId);
   }
 
   @Post(":storeId/event-types")
+  @UseGuards(StoreScopeGuard)
   createEventType(@Param("storeId", ParseUUIDPipe) storeId: string, @Body() body: ConfigureEventTypeDto) {
     return this.configureEventTypesUseCase.create({
       storeId,
@@ -81,6 +115,7 @@ export class StoresController {
   }
 
   @Put(":storeId/event-types/:eventTypeId")
+  @UseGuards(StoreScopeGuard)
   updateEventType(
     @Param("storeId", ParseUUIDPipe) storeId: string,
     @Param("eventTypeId", ParseUUIDPipe) eventTypeId: string,
@@ -93,12 +128,28 @@ export class StoresController {
     });
   }
 
+  @Delete(":storeId/event-types/:eventTypeId")
+  @UseGuards(StoreScopeGuard)
+  deleteEventType(
+    @CurrentUser() user: AuthenticatedUserPayload,
+    @Param("storeId", ParseUUIDPipe) storeId: string,
+    @Param("eventTypeId", ParseUUIDPipe) eventTypeId: string
+  ) {
+    return this.configureEventTypesUseCase.softDelete({
+      currentUser: user,
+      storeId,
+      eventTypeId
+    });
+  }
+
   @Get(":storeId/tournament-types")
+  @UseGuards(StoreScopeGuard)
   listTournamentTypes(@Param("storeId", ParseUUIDPipe) storeId: string) {
     return this.configureTournamentTypesUseCase.list(storeId);
   }
 
   @Post(":storeId/tournament-types")
+  @UseGuards(StoreScopeGuard)
   createTournamentType(@Param("storeId", ParseUUIDPipe) storeId: string, @Body() body: ConfigureTournamentTypeDto) {
     return this.configureTournamentTypesUseCase.create({
       storeId,
@@ -107,6 +158,7 @@ export class StoresController {
   }
 
   @Put(":storeId/tournament-types/:tournamentTypeId")
+  @UseGuards(StoreScopeGuard)
   updateTournamentType(
     @Param("storeId", ParseUUIDPipe) storeId: string,
     @Param("tournamentTypeId", ParseUUIDPipe) tournamentTypeId: string,
@@ -120,11 +172,13 @@ export class StoresController {
   }
 
   @Get(":storeId/social-links")
+  @UseGuards(StoreScopeGuard)
   listSocialLinks(@Param("storeId", ParseUUIDPipe) storeId: string) {
     return this.replaceStoreSocialLinksUseCase.list(storeId);
   }
 
   @Put(":storeId/social-links")
+  @UseGuards(StoreScopeGuard)
   replaceSocialLinks(
     @Param("storeId", ParseUUIDPipe) storeId: string,
     @Body() body: ReplaceStoreSocialLinksDto

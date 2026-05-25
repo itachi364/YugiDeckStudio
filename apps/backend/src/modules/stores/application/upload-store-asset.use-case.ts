@@ -54,6 +54,7 @@ export class UploadStoreAssetUseCase {
     const storedFile = await this.storage.saveStoreAsset(input.file, input.category);
     const asset = await this.prisma.managedImageAsset.create({
       data: {
+        storeId: input.storeId,
         category: input.category,
         storagePath: storedFile.storagePath,
         originalFilename: storedFile.originalFilename,

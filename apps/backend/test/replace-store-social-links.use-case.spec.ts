@@ -57,7 +57,7 @@ describe("ReplaceStoreSocialLinksUseCase", () => {
       ]
     });
 
-    expect(assertAssetCategory).toHaveBeenCalledWith("social-logo-id", ImageAssetCategory.SOCIAL_LOGO);
+    expect(assertAssetCategory).toHaveBeenCalledWith("social-logo-id", ImageAssetCategory.SOCIAL_LOGO, "store-id");
     expect(deleteMany).toHaveBeenCalledWith({
       where: {
         storeId: "store-id"

@@ -1,9 +1,11 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { AlertCircle, CalendarPlus, Plus, Save, Search, Share2, ShieldCheck, Trophy } from "lucide-react";
 import {
   ConfigureStoreCatalogInput,
+  StoreAssetOption,
   StoreEventType,
   StoreSocialLink,
+  StoreSummary,
   StoreTournamentType,
   storeApi
 } from "./store-api";
@@ -32,6 +34,9 @@ export function StoreCatalogsWorkspace({ accessToken, defaultStoreId }: StoreCat
   const [eventTypes, setEventTypes] = useState<StoreEventType[]>([]);
   const [tournamentTypes, setTournamentTypes] = useState<StoreTournamentType[]>([]);
   const [socialLinks, setSocialLinks] = useState<StoreSocialLink[]>([]);
+  const [stores, setStores] = useState<StoreSummary[]>([]);
+  const [eventLogoAssets, setEventLogoAssets] = useState<StoreAssetOption[]>([]);
+  const [socialLogoAssets, setSocialLogoAssets] = useState<StoreAssetOption[]>([]);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [isWorking, setIsWorking] = useState(false);
 
@@ -41,7 +46,7 @@ export function StoreCatalogsWorkspace({ accessToken, defaultStoreId }: StoreCat
     if (!normalizedStoreId) {
       setFeedback({
         tone: "error",
-        message: "El Store ID es obligatorio para configurar eventos, torneos y redes."
+        message: "La tienda es obligatoria para configurar eventos, torneos y redes."
       });
       return;
     }
@@ -61,12 +66,47 @@ export function StoreCatalogsWorkspace({ accessToken, defaultStoreId }: StoreCat
     }
   };
 
+  const loadStores = useCallback(async () => {
+    try {
+      const result = await storeApi.listStores(accessToken);
+      setStores(result);
+      if (!storeId && result.length === 1) {
+        setStoreId(result[0].id);
+      }
+    } catch (error) {
+      setFeedback({
+        tone: "error",
+        message: error instanceof Error ? error.message : "No fue posible cargar las tiendas."
+      });
+    }
+  }, [accessToken, storeId]);
+
+  const loadAssetOptions = useCallback(async () => {
+    if (!normalizedStoreId) {
+      setEventLogoAssets([]);
+      setSocialLogoAssets([]);
+      return;
+    }
+
+    const [eventLogos, socialLogos] = await Promise.all([
+      storeApi.listStoreAssets(accessToken, normalizedStoreId, "EVENT_LOGO"),
+      storeApi.listStoreAssets(accessToken, normalizedStoreId, "SOCIAL_LOGO")
+    ]);
+    setEventLogoAssets(eventLogos);
+    setSocialLogoAssets(socialLogos);
+  }, [accessToken, normalizedStoreId]);
+
+  useEffect(() => {
+    void loadStores();
+  }, [loadStores]);
+
   const handleLoadConfiguration = () =>
     runStoreAction(async () => {
       const [events, tournaments, links] = await Promise.all([
         storeApi.listEventTypes(accessToken, normalizedStoreId),
         storeApi.listTournamentTypes(accessToken, normalizedStoreId),
-        storeApi.listSocialLinks(accessToken, normalizedStoreId)
+        storeApi.listSocialLinks(accessToken, normalizedStoreId),
+        loadAssetOptions()
       ]);
 
       setEventTypes(events);
@@ -172,15 +212,25 @@ export function StoreCatalogsWorkspace({ accessToken, defaultStoreId }: StoreCat
       <section className="data-panel" aria-label="Seleccion de tienda para catalogos">
         <div className="review-actions">
           <label>
-            Store ID
-            <input
+            Tienda
+            <select
               name="storeId"
-              placeholder="uuid de la tienda"
               required
-              type="text"
               value={storeId}
-              onChange={(event) => setStoreId(event.currentTarget.value)}
-            />
+              onChange={(event) => {
+                setStoreId(event.currentTarget.value);
+                setEventTypes([]);
+                setTournamentTypes([]);
+                setSocialLinks([]);
+              }}
+            >
+              <option value="">Selecciona una tienda</option>
+              {stores.map((store) => (
+                <option key={store.id} value={store.id}>
+                  {store.name}
+                </option>
+              ))}
+            </select>
           </label>
           <button className="secondary-button" disabled={isWorking} type="button" onClick={handleLoadConfiguration}>
             <Search size={18} aria-hidden="true" />
@@ -198,6 +248,7 @@ export function StoreCatalogsWorkspace({ accessToken, defaultStoreId }: StoreCat
           <CatalogList items={eventTypes} emptyText="Sin tipos de eventos." />
           <CatalogForm
             buttonLabel="Crear evento"
+            logoAssets={eventLogoAssets}
             isWorking={isWorking}
             labelPrefix="Evento"
             onSubmit={handleCreateEventType}
@@ -212,6 +263,7 @@ export function StoreCatalogsWorkspace({ accessToken, defaultStoreId }: StoreCat
           <CatalogList items={tournamentTypes} emptyText="Sin tipos de torneos." />
           <CatalogForm
             buttonLabel="Crear torneo"
+            logoAssets={eventLogoAssets}
             isWorking={isWorking}
             labelPrefix="Torneo"
             onSubmit={handleCreateTournamentType}
@@ -254,12 +306,18 @@ export function StoreCatalogsWorkspace({ accessToken, defaultStoreId }: StoreCat
                 />
               </label>
               <label>
-                Icon asset ID
-                <input
-                  type="text"
+                Icono
+                <select
                   value={link.iconAssetId ?? ""}
                   onChange={(event) => updateSocialLink(index, "iconAssetId", event.currentTarget.value)}
-                />
+                >
+                  <option value="">Sin icono</option>
+                  {socialLogoAssets.map((asset) => (
+                    <option key={asset.id} value={asset.id}>
+                      {asset.originalFilename || asset.storagePath}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label>
                 Orden
@@ -303,11 +361,13 @@ export function StoreCatalogsWorkspace({ accessToken, defaultStoreId }: StoreCat
 
 function CatalogForm({
   buttonLabel,
+  logoAssets,
   isWorking,
   labelPrefix,
   onSubmit
 }: {
   buttonLabel: string;
+  logoAssets: StoreAssetOption[];
   isWorking: boolean;
   labelPrefix: string;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -323,8 +383,15 @@ function CatalogForm({
         <input name="description" type="text" />
       </label>
       <label>
-        {labelPrefix} logo asset ID
-        <input name="logoAssetId" type="text" />
+        {labelPrefix} logo
+        <select name="logoAssetId">
+          <option value="">Sin logo</option>
+          {logoAssets.map((asset) => (
+            <option key={asset.id} value={asset.id}>
+              {asset.originalFilename || asset.storagePath}
+            </option>
+          ))}
+        </select>
       </label>
       <label className="inline-check catalog-check">
         <input defaultChecked name="isActive" type="checkbox" />

@@ -6,7 +6,11 @@ import { PrismaService } from "../../../infrastructure/prisma/prisma.service";
 export class StoreAssetPolicyService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async assertAssetCategory(assetId: string | null | undefined, expectedCategory: ImageAssetCategory): Promise<void> {
+  async assertAssetCategory(
+    assetId: string | null | undefined,
+    expectedCategory: ImageAssetCategory,
+    storeId?: string
+  ): Promise<void> {
     if (!assetId) {
       return;
     }
@@ -17,7 +21,8 @@ export class StoreAssetPolicyService {
       },
       select: {
         category: true,
-        deletedAt: true
+        deletedAt: true,
+        storeId: true
       }
     });
 
@@ -27,6 +32,10 @@ export class StoreAssetPolicyService {
 
     if (asset.category !== expectedCategory) {
       throw new BadRequestException(`El asset indicado debe ser de categoria ${expectedCategory}.`);
+    }
+
+    if (storeId && asset.storeId !== storeId) {
+      throw new BadRequestException("El asset configurable indicado no pertenece a la tienda.");
     }
   }
 }

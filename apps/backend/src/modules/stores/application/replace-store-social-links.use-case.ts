@@ -38,7 +38,9 @@ export class ReplaceStoreSocialLinksUseCase {
   async execute(input: ReplaceStoreSocialLinksInput) {
     await this.assertStoreExists(input.storeId);
     await Promise.all(
-      input.links.map((link) => this.assetPolicy.assertAssetCategory(link.iconAssetId, ImageAssetCategory.SOCIAL_LOGO))
+      input.links.map((link) =>
+        this.assetPolicy.assertAssetCategory(link.iconAssetId, ImageAssetCategory.SOCIAL_LOGO, input.storeId)
+      )
     );
 
     const operations = [

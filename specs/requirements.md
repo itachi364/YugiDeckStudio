@@ -150,6 +150,9 @@ Reglas:
 - `root` puede crear operadores en cualquier tienda.
 - `store_admin` puede crear operadores únicamente en su tienda.
 - `operator` no puede crear usuarios.
+- En frontend, la pantalla de registro de usuarios solo debe mostrarse después de iniciar sesión y únicamente para `root`.
+- En frontend, la pantalla de cambio de contraseña no debe aparecer como opción de navegación; solo debe mostrarse por redirección inmediata cuando `mustChangePassword = true`.
+- En frontend, antes de iniciar sesión solo debe mostrarse la opción de login; los módulos autenticados no deben mostrarse deshabilitados.
 - Los usuarios no-root deben quedar vinculados a una tienda.
 - Los usuarios no-root solo deben ver y operar información de su tienda.
 - El aislamiento por tienda debe aplicarse en backend mediante filtros y validaciones por `store_id`, no solo en frontend.
@@ -415,6 +418,40 @@ Dado que el usuario ejecuta el entorno con Docker Compose, cuando los servicios 
 ### AC-036: Cobertura de pruebas unitarias
 
 Dado que se genera código productivo para un requisito, cuando se ejecutan las pruebas, entonces cada criterio de aceptación relacionado tiene al menos una ruta de prueba unitaria o de componente.
+
+### AC-037: Navegación contextual por sesión y rol
+
+Dado que un usuario no ha iniciado sesión, cuando abre la aplicación, entonces la navegación muestra solo `Login`.
+
+Dado que el login devuelve `mustChangePassword = true`, cuando la sesión se establece, entonces la aplicación muestra inmediatamente el cambio de contraseña sin exponerlo como botón de navegación.
+
+Dado que un usuario autenticado no es `root`, cuando ve la navegación, entonces no debe ver la opción `Registro`.
+
+Dado que un usuario autenticado es `root` y ya cambió su contraseña, cuando ve la navegación, entonces puede acceder a `Registro`.
+
+### AC-038: Index de eventos configurados por tienda
+
+Dado que un usuario no-root inicia sesión, cuando llega al index de eventos, entonces solo ve eventos configurados de su tienda vinculada.
+
+Dado que `root` inicia sesión, cuando llega al index de eventos, entonces ve eventos configurados de todas las tiendas.
+
+Dado que un usuario autenticado ve el index de eventos, cuando se cargan los datos, entonces se muestra una estadística con la cantidad total de eventos visibles.
+
+Dado que un `operator`, `store_admin` o `root` ve un evento, cuando usa la acción de modificación, entonces puede actualizar el evento según su alcance de tienda.
+
+Dado que un `operator` ve un evento, cuando revisa sus acciones, entonces no debe tener opción de eliminación.
+
+Dado que `store_admin` o `root` elimina un evento, cuando confirma la acción, entonces el evento se inactiva mediante soft delete y no se borra físicamente de base de datos.
+
+### AC-039: Navegacion fija y selectores de datos relacionados
+
+Dado que un usuario autenticado navega entre pantallas, cuando cambia al modulo de seguridad u otro modulo con mayor contenido vertical, entonces el menu lateral debe conservar su posicion visual sin desplazarse hacia abajo.
+
+Dado que una pantalla solicita seleccionar tienda, logos, tipos de evento o tipos de torneo, cuando el usuario llena el formulario, entonces esos campos deben mostrarse como listas desplegables alimentadas por datos existentes en base de datos y no como campos de texto libre para IDs.
+
+Dado que un usuario no-root consulta listas desplegables de tienda o assets, cuando el backend responde, entonces solo debe devolver datos de su tienda vinculada.
+
+Dado que `root` consulta listas desplegables de tienda, cuando el backend responde, entonces puede recibir todas las tiendas existentes.
 
 ## 8. Preguntas abiertas
 

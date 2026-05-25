@@ -520,6 +520,25 @@ Implementación inicial `v0.1.0`:
 - `RootOnlyGuard` bloquea operaciones root si el usuario no es root o si `must_change_password = true`.
 - El seed inicial crea `root` solo cuando no existen usuarios previos.
 
+Reglas de navegación frontend:
+
+- Sin sesión activa, la navegación debe mostrar solo `Login`.
+- `Cambio de contraseña` es un estado interno obligatorio cuando `mustChangePassword = true`; no debe mostrarse como botón de navegación.
+- Mientras `mustChangePassword = true`, la UI debe bloquear el resto de módulos y mostrar únicamente el formulario de cambio de contraseña.
+- `Registro` solo debe mostrarse después de iniciar sesión y únicamente para `root`.
+- Los usuarios no-root no deben ver la opción `Registro`, incluso si el backend rechazaría la operación por permisos.
+- Después de iniciar sesión, la vista por defecto debe ser el index de eventos configurados.
+- El index de eventos debe listar eventos filtrados por la tienda del usuario no-root; `root` puede ver eventos de todas las tiendas.
+- `operator`, `store_admin` y `root` pueden crear y modificar eventos dentro de su alcance.
+- La eliminación de eventos debe ser soft delete mediante inactivación (`isActive = false`) y solo debe estar disponible para `store_admin` y `root`.
+
+Reglas de seleccion de datos relacionados en frontend:
+
+- El menu lateral debe mantenerse fijo en la parte superior de la pantalla autenticada y no debe desplazarse hacia abajo cuando una vista tenga mas contenido vertical.
+- Los campos que referencian entidades persistidas deben ser listas desplegables alimentadas por API: tienda, logos/assets configurables, tipos de evento y tipos de torneo.
+- Los formularios no deben permitir digitar manualmente IDs de tienda, assets, tipos de evento o tipos de torneo.
+- Las listas desplegables de tienda y assets deben respetar el aislamiento multi-tienda: `root` puede listar todas las tiendas; usuarios no-root solo reciben su tienda y sus assets.
+
 Permisos iniciales:
 
 - `root`: todos los permisos globales.

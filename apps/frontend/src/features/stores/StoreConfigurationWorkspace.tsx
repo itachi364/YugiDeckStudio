@@ -1,6 +1,6 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { AlertCircle, ImageUp, Palette, Save, Search, ShieldCheck } from "lucide-react";
-import { storeApi, StoreAssetCategory, StoreConfiguration } from "./store-api";
+import { storeApi, StoreAssetCategory, StoreAssetOption, StoreConfiguration, StoreSummary } from "./store-api";
 
 type StoreConfigurationWorkspaceProps = {
   accessToken: string;
@@ -42,6 +42,9 @@ export function StoreConfigurationWorkspace({
 }: StoreConfigurationWorkspaceProps) {
   const [storeId, setStoreId] = useState(defaultStoreId ?? "");
   const [configuration, setConfiguration] = useState<StoreConfiguration | null>(null);
+  const [stores, setStores] = useState<StoreSummary[]>([]);
+  const [storeLogoAssets, setStoreLogoAssets] = useState<StoreAssetOption[]>([]);
+  const [backgroundAssets, setBackgroundAssets] = useState<StoreAssetOption[]>([]);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [isWorking, setIsWorking] = useState(false);
 
@@ -51,7 +54,7 @@ export function StoreConfigurationWorkspace({
     if (!normalizedStoreId) {
       setFeedback({
         tone: "error",
-        message: "El Store ID es obligatorio para configurar la tienda."
+        message: "La tienda es obligatoria para configurar la tienda."
       });
       return;
     }
@@ -71,9 +74,46 @@ export function StoreConfigurationWorkspace({
     }
   };
 
+  const loadStores = useCallback(async () => {
+    try {
+      const result = await storeApi.listStores(accessToken);
+      setStores(result);
+      if (!storeId && result.length === 1) {
+        setStoreId(result[0].id);
+      }
+    } catch (error) {
+      setFeedback({
+        tone: "error",
+        message: error instanceof Error ? error.message : "No fue posible cargar las tiendas."
+      });
+    }
+  }, [accessToken, storeId]);
+
+  const loadAssetOptions = useCallback(async () => {
+    if (!normalizedStoreId) {
+      setStoreLogoAssets([]);
+      setBackgroundAssets([]);
+      return;
+    }
+
+    const [logos, backgrounds] = await Promise.all([
+      storeApi.listStoreAssets(accessToken, normalizedStoreId, "STORE_LOGO"),
+      storeApi.listStoreAssets(accessToken, normalizedStoreId, "BACKGROUND_IMAGE")
+    ]);
+    setStoreLogoAssets(logos);
+    setBackgroundAssets(backgrounds);
+  }, [accessToken, normalizedStoreId]);
+
+  useEffect(() => {
+    void loadStores();
+  }, [loadStores]);
+
   const handleLoadConfiguration = () =>
     runStoreAction(async () => {
-      const result = await storeApi.getStoreConfiguration(accessToken, normalizedStoreId);
+      const [result] = await Promise.all([
+        storeApi.getStoreConfiguration(accessToken, normalizedStoreId),
+        loadAssetOptions()
+      ]);
       setConfiguration(result);
       setFeedback({
         tone: "success",
@@ -114,6 +154,7 @@ export function StoreConfigurationWorkspace({
       }
 
       const upload = await storeApi.uploadStoreAsset(accessToken, normalizedStoreId, category, file);
+      await loadAssetOptions();
       setConfiguration((current) => ({
         ...(current ?? {
           id: normalizedStoreId,
@@ -148,15 +189,23 @@ export function StoreConfigurationWorkspace({
       <section className="data-panel" aria-label="Seleccion de tienda">
         <div className="review-actions">
           <label>
-            Store ID
-            <input
+            Tienda
+            <select
               name="storeId"
-              placeholder="uuid de la tienda"
               required
-              type="text"
               value={storeId}
-              onChange={(event) => setStoreId(event.currentTarget.value)}
-            />
+              onChange={(event) => {
+                setStoreId(event.currentTarget.value);
+                setConfiguration(null);
+              }}
+            >
+              <option value="">Selecciona una tienda</option>
+              {stores.map((store) => (
+                <option key={store.id} value={store.id}>
+                  {store.name}
+                </option>
+              ))}
+            </select>
           </label>
           <button className="secondary-button" disabled={isWorking} type="button" onClick={handleLoadConfiguration}>
             <Search size={18} aria-hidden="true" />
@@ -191,31 +240,49 @@ export function StoreConfigurationWorkspace({
           />
         </label>
         <label>
-          Logo primario asset ID
-          <input
-            defaultValue={configuration?.primaryLogoAssetId ?? ""}
+          Logo primario
+          <select
             key={`primary-${configuration?.primaryLogoAssetId ?? "empty"}`}
             name="primaryLogoAssetId"
-            type="text"
-          />
+            defaultValue={configuration?.primaryLogoAssetId ?? ""}
+          >
+            <option value="">Sin logo</option>
+            {storeLogoAssets.map((asset) => (
+              <option key={asset.id} value={asset.id}>
+                {asset.originalFilename || asset.storagePath}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
-          Logo secundario asset ID
-          <input
-            defaultValue={configuration?.secondaryLogoAssetId ?? ""}
+          Logo secundario
+          <select
             key={`secondary-${configuration?.secondaryLogoAssetId ?? "empty"}`}
             name="secondaryLogoAssetId"
-            type="text"
-          />
+            defaultValue={configuration?.secondaryLogoAssetId ?? ""}
+          >
+            <option value="">Sin logo</option>
+            {storeLogoAssets.map((asset) => (
+              <option key={asset.id} value={asset.id}>
+                {asset.originalFilename || asset.storagePath}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
-          Fondo asset ID
-          <input
-            defaultValue={configuration?.backgroundImageAssetId ?? ""}
+          Fondo
+          <select
             key={`background-${configuration?.backgroundImageAssetId ?? "empty"}`}
             name="backgroundImageAssetId"
-            type="text"
-          />
+            defaultValue={configuration?.backgroundImageAssetId ?? ""}
+          >
+            <option value="">Sin fondo</option>
+            {backgroundAssets.map((asset) => (
+              <option key={asset.id} value={asset.id}>
+                {asset.originalFilename || asset.storagePath}
+              </option>
+            ))}
+          </select>
         </label>
         <button className="primary-button full-width" disabled={isWorking} type="submit">
           <Save size={18} aria-hidden="true" />

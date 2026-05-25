@@ -67,7 +67,20 @@ async function queueSecurityLists() {
           description: "Administrar seguridad"
         }
       ])
-    );
+    )
+    .mockResolvedValueOnce(await mockJsonResponse([{ id: "store-id", name: "Ready For Duel" }]));
+}
+
+async function queueVisibleEventTypes(events: unknown[] = []) {
+  fetchMock.mockResolvedValueOnce(await mockJsonResponse(events));
+}
+
+async function queueStoreList(stores: unknown[] = [{ id: "store-id", name: "Ready For Duel" }]) {
+  fetchMock.mockResolvedValueOnce(await mockJsonResponse(stores));
+}
+
+async function queueStoreAssets(assets: unknown[] = []) {
+  fetchMock.mockResolvedValueOnce(await mockJsonResponse(assets));
 }
 
 async function loginAndOpenDeckReview(user: ReturnType<typeof userEvent.setup>) {
@@ -86,7 +99,7 @@ async function loginAndOpenDeckReview(user: ReturnType<typeof userEvent.setup>) 
       }
     })
   );
-  await queueSecurityLists();
+  await queueVisibleEventTypes();
 
   renderApp();
 
@@ -114,7 +127,8 @@ async function loginAndOpenStoreConfiguration(user: ReturnType<typeof userEvent.
       }
     })
   );
-  await queueSecurityLists();
+  await queueVisibleEventTypes();
+  await queueStoreList();
 
   renderApp();
 
@@ -142,16 +156,17 @@ async function loginAndOpenCatalogs(user: ReturnType<typeof userEvent.setup>) {
       }
     })
   );
-  await queueSecurityLists();
+  await queueVisibleEventTypes();
+  await queueStoreList();
 
   renderApp();
 
   await user.type(screen.getByLabelText(/usuario/i), "admin");
   await user.type(screen.getByLabelText(/contrasena/i), "Admin123!");
   await user.click(screen.getByRole("button", { name: /entrar/i }));
-  await user.click(await screen.findByRole("button", { name: /eventos/i }));
+  await user.click(await screen.findByRole("button", { name: /catalogos/i }));
 
-  expect(await screen.findByRole("heading", { name: /eventos y redes/i })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: /catalogos y redes/i })).toBeInTheDocument();
 }
 
 async function loginAndOpenDeckPreview(user: ReturnType<typeof userEvent.setup>) {
@@ -170,7 +185,7 @@ async function loginAndOpenDeckPreview(user: ReturnType<typeof userEvent.setup>)
       }
     })
   );
-  await queueSecurityLists();
+  await queueVisibleEventTypes();
 
   renderApp();
 
@@ -194,11 +209,32 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: /login local/i })).toBeInTheDocument();
     expect(screen.getByRole("form", { name: /login local/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /entrar/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /registro/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /contrasena/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /seguridad/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /decks/i })).not.toBeInTheDocument();
   });
 
-  it("registers an operator with required store and user data", async () => {
+  it("allows root to open registration after login and register an operator", async () => {
     const user = userEvent.setup();
-    fetchMock.mockResolvedValue(
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        accessToken: "jwt-token",
+        expiresIn: "1d",
+        user: {
+          id: "root-id",
+          username: "root",
+          displayName: "Root",
+          storeId: null,
+          isRoot: true,
+          mustChangePassword: false,
+          roles: ["root"]
+        }
+      })
+    );
+    await queueVisibleEventTypes();
+    await queueStoreList();
+    fetchMock.mockResolvedValueOnce(
       await mockJsonResponse({
         userId: "user-id",
         username: "operator1",
@@ -209,8 +245,12 @@ describe("App", () => {
 
     renderApp();
 
-    await user.click(screen.getByRole("button", { name: /registro/i }));
-    await user.type(screen.getByLabelText(/store id/i), "store-id");
+    await user.type(screen.getByLabelText(/usuario/i), "root");
+    await user.type(screen.getByLabelText(/contrasena/i), "ChangedPassword123!");
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
+    await user.click(await screen.findByRole("button", { name: /registro/i }));
+
+    await user.selectOptions(await screen.findByLabelText(/tienda/i), "store-id");
     await user.type(screen.getByLabelText(/^usuario$/i), "operator1");
     await user.type(screen.getByLabelText(/nombre visible/i), "Operator One");
     await user.type(screen.getByLabelText(/email/i), "operator@example.com");
@@ -256,7 +296,7 @@ describe("App", () => {
         mustChangePassword: false
       })
     );
-    await queueSecurityLists();
+    await queueVisibleEventTypes();
 
     renderApp();
 
@@ -266,6 +306,9 @@ describe("App", () => {
 
     expect(await screen.findByRole("heading", { name: /cambiar contrasena/i })).toBeInTheDocument();
     expect(screen.getByText(/debes cambiar la contrasena antes de continuar/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /contrasena/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /registro/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /seguridad/i })).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText(/contrasena actual/i), "ChangeMe123!");
     await user.type(screen.getByLabelText(/nueva contrasena/i), "NewPassword123!");
@@ -305,6 +348,7 @@ describe("App", () => {
         }
       })
     );
+    await queueVisibleEventTypes();
     await queueSecurityLists();
 
     renderApp();
@@ -312,6 +356,7 @@ describe("App", () => {
     await user.type(screen.getByLabelText(/usuario/i), "root");
     await user.type(screen.getByLabelText(/contrasena/i), "ChangedPassword123!");
     await user.click(screen.getByRole("button", { name: /entrar/i }));
+    await user.click(await screen.findByRole("button", { name: /seguridad/i }));
 
     expect(await screen.findByRole("heading", { name: /seguridad local/i })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: /usuarios, roles y permisos/i })).toBeInTheDocument();
@@ -323,6 +368,39 @@ describe("App", () => {
         })
       })
     );
+  });
+
+  it("returns to anonymous navigation after logout", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        accessToken: "jwt-token",
+        expiresIn: "1d",
+        user: {
+          id: "root-id",
+          username: "root",
+          displayName: "Root",
+          storeId: null,
+          isRoot: true,
+          mustChangePassword: false,
+          roles: ["root"]
+        }
+      })
+    );
+    await queueVisibleEventTypes();
+
+    renderApp();
+
+    await user.type(screen.getByLabelText(/usuario/i), "root");
+    await user.type(screen.getByLabelText(/contrasena/i), "ChangedPassword123!");
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
+    await screen.findByRole("button", { name: /registro/i });
+    await user.click(screen.getByRole("button", { name: /cerrar sesion/i }));
+
+    expect(screen.getByRole("heading", { name: /login local/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /login/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /registro/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /decks/i })).not.toBeInTheDocument();
   });
 
   it("creates roles and permissions from the security workspace", async () => {
@@ -342,6 +420,7 @@ describe("App", () => {
         }
       })
     );
+    await queueVisibleEventTypes();
     await queueSecurityLists();
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse({
@@ -364,6 +443,7 @@ describe("App", () => {
     await user.type(screen.getByLabelText(/usuario/i), "root");
     await user.type(screen.getByLabelText(/contrasena/i), "ChangedPassword123!");
     await user.click(screen.getByRole("button", { name: /entrar/i }));
+    await user.click(await screen.findByRole("button", { name: /seguridad/i }));
 
     await user.type(await screen.findByLabelText(/^nombre$/i), "judge");
     await user.type(screen.getAllByLabelText(/^descripcion$/i)[0], "Gestionar jueces");
@@ -397,7 +477,7 @@ describe("App", () => {
     );
   });
 
-  it("shows access denied errors in the security workspace", async () => {
+  it("hides root-only navigation for operators", async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse({
@@ -414,9 +494,16 @@ describe("App", () => {
         }
       })
     );
-    fetchMock.mockResolvedValueOnce(await mockJsonResponse({ message: "Forbidden" }, false));
-    fetchMock.mockResolvedValueOnce(await mockJsonResponse({ message: "Forbidden" }, false));
-    fetchMock.mockResolvedValueOnce(await mockJsonResponse({ message: "Forbidden" }, false));
+    await queueVisibleEventTypes([
+      {
+        id: "event-type-id",
+        storeId: "store-id",
+        name: "Regional",
+        description: "WCQ Regional",
+        logoAssetId: null,
+        isActive: true
+      }
+    ]);
 
     renderApp();
 
@@ -424,7 +511,245 @@ describe("App", () => {
     await user.type(screen.getByLabelText(/contrasena/i), "Operator123!");
     await user.click(screen.getByRole("button", { name: /entrar/i }));
 
-    expect(await screen.findByText(/forbidden/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /eventos configurados/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /registro/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /seguridad/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/^regional$/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /eliminar/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /eventos/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /decks/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /revision/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /imagen/i })).toBeInTheDocument();
+  });
+
+  it("loads the configured events index after login", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        accessToken: "operator-token",
+        expiresIn: "1d",
+        user: {
+          id: "operator-id",
+          username: "operator",
+          displayName: "Operator",
+          storeId: "store-id",
+          isRoot: false,
+          mustChangePassword: false,
+          roles: ["operator"]
+        }
+      })
+    );
+    await queueVisibleEventTypes([
+      {
+        id: "event-type-id",
+        storeId: "store-id",
+        name: "Regional",
+        description: "WCQ Regional",
+        logoAssetId: null,
+        isActive: true
+      }
+    ]);
+
+    renderApp();
+
+    await user.type(screen.getByLabelText(/usuario/i), "operator");
+    await user.type(screen.getByLabelText(/contrasena/i), "Operator123!");
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
+
+    expect(await screen.findByRole("heading", { name: /eventos configurados/i })).toBeInTheDocument();
+    expect(screen.getByText(/eventos visibles/i)).toBeInTheDocument();
+    expect(screen.getByText("1")).toBeInTheDocument();
+    expect(screen.getByText(/wcq regional/i)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/stores/event-types",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer operator-token"
+        })
+      })
+    );
+  });
+
+  it("lets operators create and modify events without exposing delete", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        accessToken: "operator-token",
+        expiresIn: "1d",
+        user: {
+          id: "operator-id",
+          username: "operator",
+          displayName: "Operator",
+          storeId: "store-id",
+          isRoot: false,
+          mustChangePassword: false,
+          roles: ["operator"]
+        }
+      })
+    );
+    await queueVisibleEventTypes([
+      {
+        id: "event-type-id",
+        storeId: "store-id",
+        name: "Regional",
+        description: "WCQ Regional",
+        logoAssetId: null,
+        isActive: true
+      }
+    ]);
+    await queueStoreList();
+    await queueStoreAssets([{ id: "event-logo-id", category: "EVENT_LOGO", originalFilename: "regional.png", storagePath: "event-logos/regional.png" }]);
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        id: "event-type-created",
+        storeId: "store-id",
+        name: "Premiere",
+        description: "Premiere local",
+        logoAssetId: "event-logo-id",
+        isActive: true
+      })
+    );
+    await queueStoreList();
+    await queueStoreAssets([]);
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        id: "event-type-id",
+        storeId: "store-id",
+        name: "Regional WCQ",
+        description: "Regional actualizado",
+        logoAssetId: null,
+        isActive: true
+      })
+    );
+
+    renderApp();
+
+    await user.type(screen.getByLabelText(/usuario/i), "operator");
+    await user.type(screen.getByLabelText(/contrasena/i), "Operator123!");
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
+    await screen.findByRole("heading", { name: /eventos configurados/i });
+
+    expect(screen.queryByRole("button", { name: /eliminar/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /crear evento/i }));
+    await user.type(screen.getByLabelText(/^nombre$/i), "Premiere");
+    await user.type(screen.getByLabelText(/^descripcion$/i), "Premiere local");
+    await user.selectOptions(screen.getByLabelText(/^logo$/i), "event-logo-id");
+    await user.click(screen.getByRole("button", { name: /guardar evento/i }));
+
+    expect(await screen.findByText(/evento premiere creado/i)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/stores/store-id/event-types",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          name: "Premiere",
+          description: "Premiere local",
+          logoAssetId: "event-logo-id",
+          isActive: true
+        })
+      })
+    );
+
+    await user.click(screen.getAllByRole("button", { name: /modificar/i })[0]);
+    await user.clear(screen.getByLabelText(/^nombre$/i));
+    await user.type(screen.getByLabelText(/^nombre$/i), "Regional WCQ");
+    await user.clear(screen.getByLabelText(/^descripcion$/i));
+    await user.type(screen.getByLabelText(/^descripcion$/i), "Regional actualizado");
+    await user.click(screen.getByRole("button", { name: /guardar evento/i }));
+
+    expect(await screen.findByText(/evento regional wcq actualizado/i)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/stores/store-id/event-types/event-type-id",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({
+          name: "Regional WCQ",
+          description: "Regional actualizado",
+          logoAssetId: null,
+          isActive: true
+        })
+      })
+    );
+  });
+
+  it("lets root see all stores and soft delete events", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        accessToken: "jwt-token",
+        expiresIn: "1d",
+        user: {
+          id: "root-id",
+          username: "root",
+          displayName: "Root",
+          storeId: null,
+          isRoot: true,
+          mustChangePassword: false,
+          roles: ["root"]
+        }
+      })
+    );
+    await queueVisibleEventTypes([
+      {
+        id: "event-type-a",
+        storeId: "store-a",
+        store: {
+          id: "store-a",
+          name: "Ready For Duel"
+        },
+        name: "Regional",
+        description: "WCQ Regional",
+        logoAssetId: null,
+        isActive: true
+      },
+      {
+        id: "event-type-b",
+        storeId: "store-b",
+        store: {
+          id: "store-b",
+          name: "Yugi Local"
+        },
+        name: "Premiere",
+        description: "Premiere local",
+        logoAssetId: null,
+        isActive: true
+      }
+    ]);
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        id: "event-type-a",
+        storeId: "store-a",
+        name: "Regional",
+        description: "WCQ Regional",
+        logoAssetId: null,
+        isActive: false
+      })
+    );
+
+    renderApp();
+
+    await user.type(screen.getByLabelText(/usuario/i), "root");
+    await user.type(screen.getByLabelText(/contrasena/i), "ChangedPassword123!");
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
+
+    expect(await screen.findByText(/ready for duel/i)).toBeInTheDocument();
+    expect(screen.getByText(/yugi local/i)).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+
+    await user.click(screen.getAllByRole("button", { name: /eliminar/i })[0]);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/stores/store-a/event-types/event-type-a",
+      expect.objectContaining({
+        method: "DELETE",
+        headers: expect.objectContaining({
+          Authorization: "Bearer jwt-token"
+        })
+      })
+    );
+    expect(await screen.findByText(/evento regional inactivado/i)).toBeInTheDocument();
+    expect(screen.getByText(/inactivo/i)).toBeInTheDocument();
   });
 
   it("uploads a deck list image with required metadata", async () => {
@@ -445,7 +770,10 @@ describe("App", () => {
         }
       })
     );
-    await queueSecurityLists();
+    await queueVisibleEventTypes();
+    await queueStoreList();
+    fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
+    fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse({
         deckId: "deck-id",
@@ -517,7 +845,10 @@ describe("App", () => {
         }
       })
     );
-    await queueSecurityLists();
+    await queueVisibleEventTypes();
+    await queueStoreList();
+    fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
+    fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
 
     renderApp();
 
@@ -727,6 +1058,13 @@ describe("App", () => {
         tournamentTypes: []
       })
     );
+    await queueStoreAssets([
+      { id: "primary-logo-id", category: "STORE_LOGO", originalFilename: "primary.png", storagePath: "store-logos/primary.png" },
+      { id: "secondary-logo-id", category: "STORE_LOGO", originalFilename: "secondary.png", storagePath: "store-logos/secondary.png" }
+    ]);
+    await queueStoreAssets([
+      { id: "background-id", category: "BACKGROUND_IMAGE", originalFilename: "background.png", storagePath: "backgrounds/background.png" }
+    ]);
 
     await user.click(screen.getByRole("button", { name: /consultar/i }));
 
@@ -742,7 +1080,7 @@ describe("App", () => {
         })
       })
     );
-    expect(await screen.findByDisplayValue(/ready for duel/i)).toBeInTheDocument();
+    expect(await screen.findByLabelText(/nombre de tienda/i)).toHaveValue("Ready For Duel");
     expect(screen.getByDisplayValue("#10131a")).toBeInTheDocument();
     expect(screen.getByDisplayValue("ReadyForDuel")).toBeInTheDocument();
   });
@@ -764,6 +1102,8 @@ describe("App", () => {
         tournamentTypes: []
       })
     );
+    await queueStoreAssets([{ id: "primary-logo-id", category: "STORE_LOGO", originalFilename: "primary.png", storagePath: "store-logos/primary.png" }]);
+    await queueStoreAssets([]);
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse({
         id: "store-id",
@@ -780,7 +1120,7 @@ describe("App", () => {
     );
 
     await user.click(screen.getByRole("button", { name: /consultar/i }));
-    await screen.findByDisplayValue(/ready for duel/i);
+    await screen.findByLabelText(/nombre de tienda/i);
 
     await user.clear(screen.getByLabelText(/nombre de tienda/i));
     await user.type(screen.getByLabelText(/nombre de tienda/i), "Yugi Local Store");
@@ -833,6 +1173,8 @@ describe("App", () => {
         tournamentTypes: []
       })
     );
+    await queueStoreAssets([]);
+    await queueStoreAssets([]);
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse({
         imageAssetId: "primary-logo-id",
@@ -841,6 +1183,8 @@ describe("App", () => {
         retentionPolicy: "PERMANENT"
       })
     );
+    await queueStoreAssets([{ id: "primary-logo-id", category: "STORE_LOGO", originalFilename: "logo.png", storagePath: "store-logos/primary-logo-id.png" }]);
+    await queueStoreAssets([]);
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse({
         imageAssetId: "background-id",
@@ -849,9 +1193,11 @@ describe("App", () => {
         retentionPolicy: "PERMANENT"
       })
     );
+    await queueStoreAssets([{ id: "primary-logo-id", category: "STORE_LOGO", originalFilename: "logo.png", storagePath: "store-logos/primary-logo-id.png" }]);
+    await queueStoreAssets([{ id: "background-id", category: "BACKGROUND_IMAGE", originalFilename: "background.webp", storagePath: "background-images/background-id.webp" }]);
 
     await user.click(screen.getByRole("button", { name: /consultar/i }));
-    await screen.findByDisplayValue(/ready for duel/i);
+    await screen.findByLabelText(/nombre de tienda/i);
 
     const imageInputs = screen.getAllByLabelText(/^imagen$/i);
     const uploadButtons = screen.getAllByRole("button", { name: /subir/i });
@@ -916,6 +1262,12 @@ describe("App", () => {
         }
       ])
     );
+    await queueStoreAssets([
+      { id: "event-logo-id", category: "EVENT_LOGO", originalFilename: "regional.png", storagePath: "event-logos/regional.png" }
+    ]);
+    await queueStoreAssets([
+      { id: "social-logo-id", category: "SOCIAL_LOGO", originalFilename: "instagram.png", storagePath: "social-logos/instagram.png" }
+    ]);
 
     await user.click(screen.getByRole("button", { name: /consultar/i }));
 
@@ -955,6 +1307,10 @@ describe("App", () => {
     fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
     fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
     fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
+    await queueStoreAssets([
+      { id: "event-logo-id", category: "EVENT_LOGO", originalFilename: "regional.png", storagePath: "event-logos/regional.png" }
+    ]);
+    await queueStoreAssets([]);
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse({
         id: "event-type-id",
@@ -981,7 +1337,7 @@ describe("App", () => {
 
     await user.type(screen.getByLabelText(/evento nombre/i), "Regional");
     await user.type(screen.getByLabelText(/evento descripcion/i), "WCQ Regional");
-    await user.type(screen.getByLabelText(/evento logo asset id/i), "event-logo-id");
+    await user.selectOptions(screen.getByLabelText(/evento logo/i), "event-logo-id");
     await user.click(screen.getByRole("button", { name: /crear evento/i }));
 
     await user.type(screen.getByLabelText(/torneo nombre/i), "Local");
@@ -1038,6 +1394,10 @@ describe("App", () => {
         }
       ])
     );
+    await queueStoreAssets([]);
+    await queueStoreAssets([
+      { id: "social-logo-id", category: "SOCIAL_LOGO", originalFilename: "instagram.png", storagePath: "social-logos/instagram.png" }
+    ]);
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse([
         {

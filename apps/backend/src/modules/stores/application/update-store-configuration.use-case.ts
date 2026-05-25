@@ -35,9 +35,9 @@ export class UpdateStoreConfigurationUseCase {
     }
 
     await Promise.all([
-      this.assetPolicy.assertAssetCategory(input.primaryLogoAssetId, ImageAssetCategory.STORE_LOGO),
-      this.assetPolicy.assertAssetCategory(input.secondaryLogoAssetId, ImageAssetCategory.STORE_LOGO),
-      this.assetPolicy.assertAssetCategory(input.backgroundImageAssetId, ImageAssetCategory.BACKGROUND_IMAGE)
+      this.assetPolicy.assertAssetCategory(input.primaryLogoAssetId, ImageAssetCategory.STORE_LOGO, input.storeId),
+      this.assetPolicy.assertAssetCategory(input.secondaryLogoAssetId, ImageAssetCategory.STORE_LOGO, input.storeId),
+      this.assetPolicy.assertAssetCategory(input.backgroundImageAssetId, ImageAssetCategory.BACKGROUND_IMAGE, input.storeId)
     ]);
 
     return this.prisma.store.update({

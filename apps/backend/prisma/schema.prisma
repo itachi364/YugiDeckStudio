@@ -73,6 +73,7 @@ model Store {
   tournaments            Tournament[]
   decks                  Deck[]
   users                  User[]
+  managedAssets          ManagedImageAsset[]
 }
 
 model StoreSocialLink {
@@ -295,6 +296,7 @@ model GeneratedDeckImage {
 
 model ManagedImageAsset {
   id              String             @id @default(uuid())
+  storeId         String?
   category        ImageAssetCategory
   storagePath     String             @unique
   originalFilename String?
@@ -308,6 +310,7 @@ model ManagedImageAsset {
   createdAt       DateTime           @default(now())
   deletedAt       DateTime?
 
+  store                 Store?               @relation(fields: [storeId], references: [id])
   storePrimaryLogos     Store[]              @relation("StorePrimaryLogo")
   storeSecondaryLogos   Store[]              @relation("StoreSecondaryLogo")
   storeBackgrounds      Store[]              @relation("StoreBackground")
@@ -319,5 +322,6 @@ model ManagedImageAsset {
   generatedDeckImages   GeneratedDeckImage[] @relation("GeneratedDeckImage")
 
   @@index([category])
+  @@index([storeId, category])
   @@index([retentionPolicy])
 }

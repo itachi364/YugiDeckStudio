@@ -57,6 +57,7 @@ describe("UploadStoreAssetUseCase", () => {
     expect(saveStoreAsset).toHaveBeenCalledWith(file, ImageAssetCategory.STORE_LOGO);
     expect(createAsset).toHaveBeenCalledWith({
       data: expect.objectContaining({
+        storeId: "store-id",
         category: ImageAssetCategory.STORE_LOGO,
         retentionPolicy: RetentionPolicy.PERMANENT,
         storagePath: "store-logos/logo.png"

@@ -453,3 +453,55 @@
 ## Decisiones de implementación abiertas
 
 No quedan decisiones funcionales abiertas para iniciar `v0.1.0`.
+
+## Fase 6: Mejoras de experiencia frontend
+
+- [x] TASK-031: Ajustar navegación contextual por sesión y rol.
+  - Criterios de aceptación:
+    - AC-037.
+  - Pruebas:
+    - Usuario anónimo ve solo `Login`.
+    - Cambio obligatorio de contraseña se muestra por redirección interna y no como botón.
+    - `root` ve `Registro` después de iniciar sesión.
+    - Usuarios no-root no ven `Registro`.
+    - Cerrar sesión vuelve a navegación anónima con solo `Login`.
+  - Criterios de finalización:
+    - Sidebar deja de mostrar opciones autenticadas cuando no hay sesión.
+    - `Cambio de contraseña` deja de existir como opción de menú.
+    - `Registro` se muestra únicamente para `root` autenticado.
+    - Pruebas frontend cubren visibilidad contextual de navegación.
+
+- [x] TASK-032: Implementar index de eventos configurados por tienda.
+  - Criterios de aceptación:
+    - AC-038.
+  - Pruebas:
+    - `root` lista eventos de todas las tiendas.
+    - Usuario no-root lista solo eventos de su tienda.
+    - `operator` puede crear y modificar eventos, pero no ve eliminación.
+    - `store_admin` y `root` pueden inactivar eventos con soft delete.
+    - Frontend redirige al index de eventos después de login.
+    - Frontend muestra estadística de eventos visibles.
+  - Criterios de finalización:
+    - Endpoint de listado visible por usuario implementado.
+    - Soft delete de eventos implementado con `isActive = false`.
+    - UI de index de eventos disponible como pantalla inicial autenticada.
+    - Tabla muestra eventos filtrados por tienda, acciones de modificación y eliminación según rol.
+    - Botón superior de creación de evento abre la vista/formulario de creación.
+    - Pruebas backend y frontend cubren alcance por tienda y permisos de eliminación.
+ 
+- [x] TASK-033: Normalizar navegacion fija y selectores de entidades relacionadas.
+  - Criterios de aceptaciÃ³n:
+    - AC-039.
+  - Pruebas:
+    - El menu lateral conserva posicion entre pantallas.
+    - Los formularios usan lista desplegable para tienda.
+    - Los formularios usan lista desplegable para assets configurables.
+    - Los formularios usan lista desplegable para tipos de evento y torneo.
+    - Backend filtra listas visibles por tienda para usuarios no-root.
+  - Criterios de finalizaciÃ³n:
+    - Sidebar autenticado permanece fijo y no baja al abrir seguridad.
+    - `Store ID existente` se reemplaza por `Tienda`.
+    - `Logo asset ID`, `Tournament Type ID` y `Event Type ID` dejan de ser campos de texto libre.
+    - Endpoints de tiendas visibles y assets por tienda implementados.
+    - UI consume listas desde base de datos y respeta el alcance del usuario autenticado.
+    - Pruebas backend y frontend actualizadas.

@@ -1,14 +1,26 @@
-import { FormEvent, useState } from "react";
-import { AlertCircle, CalendarDays, Images, ImageUp, KeyRound, ListChecks, LogIn, LogOut, ShieldCheck, Store, UserPlus } from "lucide-react";
+import { FormEvent, useEffect, useState } from "react";
+import { AlertCircle, CalendarDays, Images, ImageUp, ListChecks, LogIn, LogOut, ShieldCheck, Store, UserPlus } from "lucide-react";
 import { DeckImagePreviewWorkspace } from "../decks/DeckImagePreviewWorkspace";
 import { DeckReviewWorkspace } from "../decks/DeckReviewWorkspace";
 import { DeckUploadWorkspace } from "../decks/DeckUploadWorkspace";
 import { SecurityWorkspace } from "../security/SecurityWorkspace";
+import { EventTypesIndexWorkspace } from "../stores/EventTypesIndexWorkspace";
 import { StoreCatalogsWorkspace } from "../stores/StoreCatalogsWorkspace";
 import { StoreConfigurationWorkspace } from "../stores/StoreConfigurationWorkspace";
+import { StoreSummary, storeApi } from "../stores/store-api";
 import { AuthUser, authApi } from "./auth-api";
 
-type AuthMode = "login" | "register" | "change-password" | "security" | "deck-upload" | "deck-review" | "deck-preview" | "store" | "catalogs";
+type AuthMode =
+  | "login"
+  | "register"
+  | "change-password"
+  | "security"
+  | "events-index"
+  | "deck-upload"
+  | "deck-review"
+  | "deck-preview"
+  | "store"
+  | "catalogs";
 
 type AuthSession = {
   accessToken: string;
@@ -36,14 +48,14 @@ const authModes: Array<{
     icon: UserPlus
   },
   {
-    mode: "change-password",
-    label: "Contrasena",
-    icon: KeyRound
-  },
-  {
     mode: "security",
     label: "Seguridad",
     icon: ShieldCheck
+  },
+  {
+    mode: "events-index",
+    label: "Eventos",
+    icon: CalendarDays
   },
   {
     mode: "deck-upload",
@@ -67,7 +79,7 @@ const authModes: Array<{
   },
   {
     mode: "catalogs",
-    label: "Eventos",
+    label: "Catalogos",
     icon: CalendarDays
   }
 ];
@@ -79,6 +91,10 @@ export function AuthWorkspace() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleModeChange = (nextMode: AuthMode) => {
+    if (mustChangePassword) {
+      return;
+    }
+
     setMode(nextMode);
     setFeedback(null);
   };
@@ -111,7 +127,7 @@ export function AuthWorkspace() {
         tone: "success",
         message: `Sesion iniciada para ${result.user.displayName}.`
       });
-      setMode("security");
+      setMode(getDefaultAuthenticatedMode(result.user));
     });
   };
 
@@ -167,7 +183,7 @@ export function AuthWorkspace() {
         tone: "success",
         message: "Contrasena actualizada."
       });
-      setMode("security");
+      setMode(getDefaultAuthenticatedMode({ ...session.user, mustChangePassword: result.mustChangePassword }));
     });
   };
 
@@ -189,6 +205,7 @@ export function AuthWorkspace() {
 
   const mustChangePassword = session?.user.mustChangePassword ?? false;
   const visibleMode = mustChangePassword ? "change-password" : mode;
+  const navigationItems = getNavigationItems(session, mustChangePassword);
 
   return (
     <main className="app-shell">
@@ -198,24 +215,14 @@ export function AuthWorkspace() {
           <h1>Acceso local</h1>
         </div>
         <nav aria-label="Flujos de autenticacion">
-          {authModes.map((item) => {
+          {navigationItems.map((item) => {
             const Icon = item.icon;
             const isActive = visibleMode === item.mode;
-            const isBlocked =
-              (mustChangePassword && item.mode !== "change-password") ||
-              ((item.mode === "security" ||
-                item.mode === "deck-upload" ||
-                item.mode === "deck-review" ||
-                item.mode === "deck-preview" ||
-                item.mode === "store" ||
-                item.mode === "catalogs") &&
-                !session);
 
             return (
               <button
                 aria-pressed={isActive}
                 className="nav-button"
-                disabled={isBlocked}
                 key={item.mode}
                 type="button"
                 onClick={() => handleModeChange(item.mode)}
@@ -234,7 +241,14 @@ export function AuthWorkspace() {
             <p className="eyebrow">v0.1.0</p>
             <h2>{getTitle(visibleMode)}</h2>
           </div>
-          <SessionBadge session={session} onLogout={() => setSession(null)} />
+          <SessionBadge
+            session={session}
+            onLogout={() => {
+              setSession(null);
+              setMode("login");
+              setFeedback(null);
+            }}
+          />
         </header>
 
         {feedback ? (
@@ -249,7 +263,7 @@ export function AuthWorkspace() {
         ) : null}
 
         {visibleMode === "register" ? (
-          <RegisterForm isSubmitting={isSubmitting} onSubmit={handleRegister} />
+          <RegisterForm accessToken={session?.accessToken} isSubmitting={isSubmitting} onSubmit={handleRegister} />
         ) : null}
 
         {visibleMode === "change-password" ? (
@@ -262,6 +276,15 @@ export function AuthWorkspace() {
 
         {visibleMode === "security" && session ? (
           <SecurityWorkspace accessToken={session.accessToken} />
+        ) : null}
+
+        {visibleMode === "events-index" && session ? (
+          <EventTypesIndexWorkspace
+            accessToken={session.accessToken}
+            defaultStoreId={session.user.storeId}
+            isRoot={session.user.isRoot}
+            roles={session.user.roles}
+          />
         ) : null}
 
         {visibleMode === "deck-upload" && session ? (
@@ -301,6 +324,10 @@ function getTitle(mode: AuthMode): string {
     return "Seguridad local";
   }
 
+  if (mode === "events-index") {
+    return "Eventos configurados";
+  }
+
   if (mode === "deck-upload") {
     return "Carga de deck";
   }
@@ -318,7 +345,7 @@ function getTitle(mode: AuthMode): string {
   }
 
   if (mode === "catalogs") {
-    return "Eventos y redes";
+    return "Catalogos y redes";
   }
 
   return "Login local";
@@ -374,17 +401,37 @@ function LoginForm({
 }
 
 function RegisterForm({
+  accessToken,
   isSubmitting,
   onSubmit
 }: {
+  accessToken?: string;
   isSubmitting: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const [stores, setStores] = useState<StoreSummary[]>([]);
+
+  useEffect(() => {
+    if (!accessToken) {
+      setStores([]);
+      return;
+    }
+
+    storeApi.listStores(accessToken).then(setStores).catch(() => setStores([]));
+  }, [accessToken]);
+
   return (
     <form aria-label="Registro de operador" className="auth-form two-column" onSubmit={onSubmit}>
       <label>
-        Store ID
-        <input name="storeId" required type="text" />
+        Tienda
+        <select name="storeId" required>
+          <option value="">Selecciona una tienda</option>
+          {stores.map((store) => (
+            <option key={store.id} value={store.id}>
+              {store.name}
+            </option>
+          ))}
+        </select>
       </label>
       <label>
         Usuario
@@ -430,9 +477,41 @@ function ChangePasswordForm({
         <input autoComplete="new-password" disabled={!isSessionReady} minLength={8} name="newPassword" required type="password" />
       </label>
       <button className="primary-button" disabled={isSubmitting || !isSessionReady} type="submit">
-        <KeyRound size={18} aria-hidden="true" />
+        <ShieldCheck size={18} aria-hidden="true" />
         <span>{isSubmitting ? "Actualizando" : "Actualizar"}</span>
       </button>
     </form>
   );
+}
+
+function getNavigationItems(session: AuthSession | null, mustChangePassword: boolean) {
+  if (mustChangePassword) {
+    return [];
+  }
+
+  if (!session) {
+    return authModes.filter((item) => item.mode === "login");
+  }
+
+  const allowedModes: AuthMode[] = ["events-index", "deck-upload", "deck-review", "deck-preview"];
+
+  if (session.user.isRoot) {
+    allowedModes.push("register", "security", "store", "catalogs");
+  } else if (session.user.roles.includes("store_admin")) {
+    allowedModes.push("store", "catalogs");
+  }
+
+  return authModes.filter((item) => allowedModes.includes(item.mode));
+}
+
+function getDefaultAuthenticatedMode(user: AuthUser): AuthMode {
+  if (user.mustChangePassword) {
+    return "change-password";
+  }
+
+  if (user.isRoot) {
+    return "events-index";
+  }
+
+  return "events-index";
 }

@@ -1,6 +1,7 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { AlertCircle, ImageUp, ShieldCheck } from "lucide-react";
 import { deckApi, UploadDeckResponse } from "./deck-api";
+import { StoreEventType, StoreSummary, StoreTournamentType, storeApi } from "../stores/store-api";
 
 type DeckUploadWorkspaceProps = {
   accessToken: string;
@@ -17,6 +18,52 @@ export function DeckUploadWorkspace({ accessToken, defaultStoreId }: DeckUploadW
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastUpload, setLastUpload] = useState<UploadDeckResponse | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [storeId, setStoreId] = useState(defaultStoreId ?? "");
+  const [stores, setStores] = useState<StoreSummary[]>([]);
+  const [eventTypes, setEventTypes] = useState<StoreEventType[]>([]);
+  const [tournamentTypes, setTournamentTypes] = useState<StoreTournamentType[]>([]);
+
+  const loadStores = useCallback(async () => {
+    try {
+      const result = await storeApi.listStores(accessToken);
+      setStores(result);
+      if (!storeId && result.length === 1) {
+        setStoreId(result[0].id);
+      }
+    } catch (error) {
+      setFeedback({
+        tone: "error",
+        message: error instanceof Error ? error.message : "No fue posible cargar las tiendas."
+      });
+    }
+  }, [accessToken, storeId]);
+
+  useEffect(() => {
+    void loadStores();
+  }, [loadStores]);
+
+  useEffect(() => {
+    if (!storeId) {
+      setEventTypes([]);
+      setTournamentTypes([]);
+      return;
+    }
+
+    Promise.all([
+      storeApi.listEventTypes(accessToken, storeId),
+      storeApi.listTournamentTypes(accessToken, storeId)
+    ])
+      .then(([events, tournaments]) => {
+        setEventTypes(events);
+        setTournamentTypes(tournaments);
+      })
+      .catch((error: unknown) => {
+        setFeedback({
+          tone: "error",
+          message: error instanceof Error ? error.message : "No fue posible cargar eventos y torneos."
+        });
+      });
+  }, [accessToken, storeId]);
 
   const handleUpload = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -81,8 +128,20 @@ export function DeckUploadWorkspace({ accessToken, defaultStoreId }: DeckUploadW
 
       <form className="auth-form two-column" aria-label="Cargar deck list" onSubmit={handleUpload}>
         <label>
-          Store ID
-          <input defaultValue={defaultStoreId ?? ""} name="storeId" required type="text" />
+          Tienda
+          <select
+            name="storeId"
+            required
+            value={storeId}
+            onChange={(event) => setStoreId(event.currentTarget.value)}
+          >
+            <option value="">Selecciona una tienda</option>
+            {stores.map((store) => (
+              <option key={store.id} value={store.id}>
+                {store.name}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
           Jugador
@@ -105,12 +164,26 @@ export function DeckUploadWorkspace({ accessToken, defaultStoreId }: DeckUploadW
           <input name="tournamentName" type="text" />
         </label>
         <label>
-          Event Type ID
-          <input name="eventTypeId" type="text" />
+          Tipo de evento
+          <select name="eventTypeId">
+            <option value="">Sin tipo de evento</option>
+            {eventTypes.map((eventType) => (
+              <option key={eventType.id} value={eventType.id}>
+                {eventType.name}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
-          Tournament Type ID
-          <input name="tournamentTypeId" type="text" />
+          Tipo de torneo
+          <select name="tournamentTypeId">
+            <option value="">Sin tipo de torneo</option>
+            {tournamentTypes.map((tournamentType) => (
+              <option key={tournamentType.id} value={tournamentType.id}>
+                {tournamentType.name}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
           Ubicacion

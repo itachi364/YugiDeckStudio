@@ -24,6 +24,18 @@ export type UpdateStoreConfigurationInput = {
 
 export type StoreAssetCategory = "STORE_LOGO" | "EVENT_LOGO" | "SOCIAL_LOGO" | "BACKGROUND_IMAGE";
 
+export type StoreSummary = {
+  id: string;
+  name: string;
+};
+
+export type StoreAssetOption = {
+  id: string;
+  category: StoreAssetCategory;
+  originalFilename?: string | null;
+  storagePath: string;
+};
+
 export type UploadStoreAssetResponse = {
   imageAssetId: string;
   category: StoreAssetCategory;
@@ -34,6 +46,10 @@ export type UploadStoreAssetResponse = {
 export type StoreEventType = {
   id: string;
   storeId?: string;
+  store?: {
+    id: string;
+    name: string;
+  } | null;
   name: string;
   description?: string | null;
   logoAssetId?: string | null;
@@ -71,6 +87,16 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
 }
 
 export const storeApi = {
+  async listStores(accessToken: string) {
+    const response = await fetch(`${API_BASE_URL}/stores`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    return parseJsonResponse<StoreSummary[]>(response);
+  },
+
   async getStoreConfiguration(accessToken: string, storeId: string) {
     const response = await fetch(`${API_BASE_URL}/stores/${storeId}`, {
       headers: {
@@ -119,8 +145,29 @@ export const storeApi = {
     return parseJsonResponse<UploadStoreAssetResponse>(response);
   },
 
+  async listStoreAssets(accessToken: string, storeId: string, category?: StoreAssetCategory) {
+    const query = category ? `?category=${encodeURIComponent(category)}` : "";
+    const response = await fetch(`${API_BASE_URL}/stores/${storeId}/assets${query}`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    return parseJsonResponse<StoreAssetOption[]>(response);
+  },
+
   async listEventTypes(accessToken: string, storeId: string) {
     const response = await fetch(`${API_BASE_URL}/stores/${storeId}/event-types`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    return parseJsonResponse<StoreEventType[]>(response);
+  },
+
+  async listVisibleEventTypes(accessToken: string) {
+    const response = await fetch(`${API_BASE_URL}/stores/event-types`, {
       headers: {
         Authorization: `Bearer ${accessToken}`
       }
@@ -150,6 +197,17 @@ export const storeApi = {
         Authorization: `Bearer ${accessToken}`
       },
       body: JSON.stringify(input)
+    });
+
+    return parseJsonResponse<StoreEventType>(response);
+  },
+
+  async deleteEventType(accessToken: string, storeId: string, eventTypeId: string) {
+    const response = await fetch(`${API_BASE_URL}/stores/${storeId}/event-types/${eventTypeId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
     });
 
     return parseJsonResponse<StoreEventType>(response);

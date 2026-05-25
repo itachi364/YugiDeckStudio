@@ -283,6 +283,27 @@ Reglas:
 
 Los endpoints de configuracion reciben `storeId` en ruta y validan el alcance de tienda contra el usuario autenticado salvo para `root`.
 
+### `GET /api/stores`
+
+Lista tiendas visibles para alimentar selectores de interfaz.
+
+Respuesta exitosa `200 OK`:
+
+```json
+[
+  {
+    "id": "uuid",
+    "name": "Ready For Duel"
+  }
+]
+```
+
+Reglas:
+
+- Requiere token valido.
+- `root` recibe todas las tiendas.
+- Usuarios no-root reciben solo su tienda vinculada.
+
 ### `GET /api/stores/{storeId}`
 
 Devuelve configuracion de tienda, redes, tipos de eventos y tipos de torneos.
@@ -349,9 +370,50 @@ Reglas:
 - Los assets configurables deben persistirse con politica `PERMANENT`.
 - La depuracion semanal no debe eliminar estos assets.
 
+### `GET /api/stores/{storeId}/assets`
+
+Lista assets configurables activos de una tienda para alimentar selectores.
+
+Query params:
+
+| Campo | Tipo | Reglas |
+| --- | --- | --- |
+| `category` | string | Opcional. `STORE_LOGO`, `EVENT_LOGO`, `SOCIAL_LOGO` o `BACKGROUND_IMAGE`. |
+
+Respuesta exitosa `200 OK`:
+
+```json
+[
+  {
+    "id": "uuid",
+    "category": "EVENT_LOGO",
+    "originalFilename": "regional.png",
+    "storagePath": "event-logos/uuid.png"
+  }
+]
+```
+
+Reglas:
+
+- Requiere token valido.
+- Valida alcance por `storeId`.
+- No devuelve assets marcados con `deletedAt`.
+- Si se envia `category`, solo devuelve assets de esa categoria.
+
 ### `GET /api/stores/{storeId}/event-types`
 
 Lista tipos de eventos de la tienda.
+
+### `GET /api/stores/event-types`
+
+Lista eventos configurados visibles para el usuario autenticado.
+
+Reglas:
+
+- Requiere token valido.
+- `root` recibe eventos de todas las tiendas.
+- Usuarios no-root reciben solo eventos de su tienda vinculada.
+- La respuesta incluye datos basicos de tienda para que `root` identifique el origen.
 
 ### `POST /api/stores/{storeId}/event-types`
 
@@ -376,6 +438,29 @@ Reglas:
 
 - `logoAssetId`, cuando exista, debe apuntar a un asset `EVENT_LOGO`.
 - Solo se actualizan tipos de eventos de la tienda indicada.
+- `operator`, `store_admin` y `root` pueden crear o modificar eventos dentro de su alcance de tienda.
+
+### `DELETE /api/stores/{storeId}/event-types/{eventTypeId}`
+
+Inactiva un evento configurado mediante soft delete.
+
+Respuesta exitosa `200 OK`:
+
+```json
+{
+  "id": "uuid",
+  "storeId": "uuid",
+  "name": "Regional",
+  "isActive": false
+}
+```
+
+Reglas:
+
+- Solo `store_admin` o `root` pueden ejecutar esta operación.
+- `operator` no puede eliminar eventos.
+- La operación no borra físicamente el registro; actualiza `isActive = false`.
+- Usuarios no-root solo pueden inactivar eventos de su tienda.
 
 ### `GET /api/stores/{storeId}/tournament-types`
 

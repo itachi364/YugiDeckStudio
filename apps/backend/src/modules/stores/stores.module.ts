@@ -4,6 +4,8 @@ import { AuthModule } from "../auth/auth.module";
 import { ConfigureEventTypesUseCase } from "./application/configure-event-types.use-case";
 import { ConfigureTournamentTypesUseCase } from "./application/configure-tournament-types.use-case";
 import { GetStoreConfigurationUseCase } from "./application/get-store-configuration.use-case";
+import { ListStoreAssetsUseCase } from "./application/list-store-assets.use-case";
+import { ListVisibleStoresUseCase } from "./application/list-visible-stores.use-case";
 import { ReplaceStoreSocialLinksUseCase } from "./application/replace-store-social-links.use-case";
 import { StoreAssetPolicyService } from "./application/store-asset-policy.service";
 import { UpdateStoreConfigurationUseCase } from "./application/update-store-configuration.use-case";
@@ -16,6 +18,8 @@ import { StoresController } from "./stores.controller";
   controllers: [StoresController],
   providers: [
     GetStoreConfigurationUseCase,
+    ListVisibleStoresUseCase,
+    ListStoreAssetsUseCase,
     UpdateStoreConfigurationUseCase,
     UploadStoreAssetUseCase,
     ConfigureEventTypesUseCase,

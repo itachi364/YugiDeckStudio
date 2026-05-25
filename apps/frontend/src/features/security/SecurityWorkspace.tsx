@@ -6,6 +6,7 @@ import {
   SecurityUser,
   securityApi
 } from "./security-api";
+import { StoreSummary, storeApi } from "../stores/store-api";
 
 type SecurityWorkspaceProps = {
   accessToken: string;
@@ -20,6 +21,7 @@ export function SecurityWorkspace({ accessToken }: SecurityWorkspaceProps) {
   const [users, setUsers] = useState<SecurityUser[]>([]);
   const [roles, setRoles] = useState<SecurityRole[]>([]);
   const [permissions, setPermissions] = useState<SecurityPermission[]>([]);
+  const [stores, setStores] = useState<StoreSummary[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState("");
   const [selectedUserId, setSelectedUserId] = useState("");
   const [permissionIds, setPermissionIds] = useState<string[]>([]);
@@ -53,14 +55,16 @@ export function SecurityWorkspace({ accessToken }: SecurityWorkspaceProps) {
     setFeedback(null);
 
     try {
-      const [nextUsers, nextRoles, nextPermissions] = await Promise.all([
+      const [nextUsers, nextRoles, nextPermissions, nextStores] = await Promise.all([
         securityApi.listUsers(accessToken),
         securityApi.listRoles(accessToken),
-        securityApi.listPermissions(accessToken)
+        securityApi.listPermissions(accessToken),
+        storeApi.listStores(accessToken)
       ]);
       setUsers(nextUsers);
       setRoles(nextRoles);
       setPermissions(nextPermissions);
+      setStores(nextStores);
       setSelectedRoleId((current) => current || nextRoles[0]?.id || "");
       setSelectedUserId((current) => current || nextUsers[0]?.id || "");
     } catch (error) {
@@ -217,8 +221,15 @@ export function SecurityWorkspace({ accessToken }: SecurityWorkspaceProps) {
         <form className="auth-form" aria-label="Crear administrador de tienda" onSubmit={handleCreateStoreAdmin}>
           <h4>Primer administrador</h4>
           <label>
-            Store ID existente
-            <input name="storeId" type="text" />
+            Tienda
+            <select name="storeId">
+              <option value="">Crear tienda nueva</option>
+              {stores.map((store) => (
+                <option key={store.id} value={store.id}>
+                  {store.name}
+                </option>
+              ))}
+            </select>
           </label>
           <label>
             Nombre de tienda nueva
