@@ -6,7 +6,7 @@
 - Las respuestas usan JSON.
 - Los errores de validación devuelven `400 Bad Request`.
 - Los conflictos de ciclo de vida devuelven `409 Conflict`.
-- En `v0.1.0`, antes de implementar autenticación y aislamiento multi-tienda, los endpoints de decks reciben `storeId` explícito. Cuando se implemente autenticación, `storeId` debe resolverse desde el usuario autenticado salvo para `root`.
+- En carga de decks, `storeId` se recibe de forma explicita para soportar el flujo local multi-tienda; el backend valida el alcance de tienda contra el usuario autenticado salvo para `root`.
 - Desde la implementación de aislamiento multi-tienda, los endpoints con `storeId` o `deckId` requieren `Authorization: Bearer jwt`.
 - `root` puede acceder a todas las tiendas.
 - Los usuarios no-root solo pueden acceder a recursos cuyo `storeId` coincida con el `storeId` de su sesión.
@@ -264,6 +264,8 @@ Respuesta exitosa `200 OK`:
 }
 ```
 
+La previsualizacion y descarga en frontend se construyen con `storagePath` servido por el servicio local `image-storage` sobre el mismo volumen Docker de imagenes.
+
 Reglas:
 
 - Solo se permite si la revision OCR fue confirmada.
@@ -279,7 +281,7 @@ Reglas:
 
 ## 9. Configuracion de tienda
 
-En `v0.1.0`, antes de implementar autenticacion, los endpoints de configuracion reciben `storeId` en ruta.
+Los endpoints de configuracion reciben `storeId` en ruta y validan el alcance de tienda contra el usuario autenticado salvo para `root`.
 
 ### `GET /api/stores/{storeId}`
 
@@ -529,7 +531,7 @@ Reglas:
 
 ### `POST /api/auth/register`
 
-Registra un usuario local no-root vinculado a una tienda. En `v0.1.0`, antes de completar autorizacion granular, el usuario queda como `operator`.
+Registra un usuario local no-root vinculado a una tienda. En `v0.1.0`, el registro local crea usuarios operativos con rol `operator`.
 
 Body:
 
@@ -593,6 +595,16 @@ Reglas:
 ## 11. Roles, permisos y asignaciones
 
 Los endpoints de roles y permisos requieren token valido y permiso `security.manage`. El usuario `root` puede ejecutarlos aunque no tenga permisos asignados explicitamente.
+
+### `GET /api/auth/users`
+
+Lista usuarios con tienda y roles asignados.
+
+Reglas:
+
+- Requiere token valido y permiso `security.manage`.
+- `root` puede listar usuarios de todas las tiendas.
+- Usuarios no-root con permiso `security.manage` solo deben recibir usuarios de su propia tienda.
 
 ### `GET /api/auth/roles`
 

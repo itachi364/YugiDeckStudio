@@ -69,6 +69,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      disable: true
     networks:
       - yugideck_local
 

@@ -6,6 +6,7 @@ import { ConfigureFirstStoreAdminUseCase } from "./application/configure-first-s
 import { ConfigurePermissionsUseCase } from "./application/configure-permissions.use-case";
 import { ConfigureRolesUseCase } from "./application/configure-roles.use-case";
 import { InitializeRootUserUseCase } from "./application/initialize-root-user.use-case";
+import { ListUsersUseCase } from "./application/list-users.use-case";
 import { LoginUseCase } from "./application/login.use-case";
 import { RegisterUserUseCase } from "./application/register-user.use-case";
 import { SYSTEM_PERMISSIONS } from "./domain/system-permissions";
@@ -34,6 +35,7 @@ export class AuthController {
     private readonly configureFirstStoreAdminUseCase: ConfigureFirstStoreAdminUseCase,
     private readonly configureRolesUseCase: ConfigureRolesUseCase,
     private readonly configurePermissionsUseCase: ConfigurePermissionsUseCase,
+    private readonly listUsersUseCase: ListUsersUseCase,
     private readonly assignPermissionsToRoleUseCase: AssignPermissionsToRoleUseCase,
     private readonly assignRolesToUserUseCase: AssignRolesToUserUseCase
   ) {}
@@ -67,6 +69,13 @@ export class AuthController {
   @UseGuards(JwtAuthGuard, RootOnlyGuard)
   configureFirstStoreAdmin(@Body() body: ConfigureFirstStoreAdminDto) {
     return this.configureFirstStoreAdminUseCase.execute(body);
+  }
+
+  @Get("users")
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermissions(SYSTEM_PERMISSIONS.SECURITY_MANAGE)
+  listUsers(@CurrentUser() user: AuthenticatedUserPayload) {
+    return this.listUsersUseCase.execute(user);
   }
 
   @Get("roles")

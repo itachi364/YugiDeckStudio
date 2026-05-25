@@ -288,7 +288,7 @@
 
 ## Fase 4: Frontend
 
-- [ ] TASK-021: Implementar UI de login, registro y cambio obligatorio de contraseña.
+- [x] TASK-021: Implementar UI de login, registro y cambio obligatorio de contraseña.
   - Criterios de aceptación:
     - AC-011.
     - AC-013.
@@ -296,8 +296,15 @@
     - Registro.
     - Login.
     - Flujo de cambio obligatorio de contraseña.
+  - Criterios de finalización:
+    - UI de login local implementada.
+    - UI de registro de operador implementada.
+    - UI de cambio obligatorio de contraseña implementada.
+    - Cliente frontend consume `POST /api/auth/login`, `POST /api/auth/register` y `POST /api/auth/change-password`.
+    - Flujo `mustChangePassword = true` bloquea la navegación y muestra cambio de contraseña.
+    - Pruebas frontend cubren login, registro y cambio de contraseña autenticado.
 
-- [ ] TASK-022: Implementar UI de usuarios, roles y permisos.
+- [x] TASK-022: Implementar UI de usuarios, roles y permisos.
   - Criterios de aceptación:
     - AC-012.
     - AC-014.
@@ -314,8 +321,16 @@
     - Permisos.
     - Acceso denegado por permisos insuficientes.
     - Aislamiento visual por tienda.
+  - Criterios de finalizaciÃ³n:
+    - Contrato `GET /api/auth/users` documentado e implementado.
+    - UI de seguridad disponible despues de login y cambio obligatorio de contrasena.
+    - UI permite listar usuarios, roles y permisos.
+    - UI permite crear primer administrador de tienda.
+    - UI permite crear roles y permisos.
+    - UI permite asignar permisos a roles y roles a usuarios.
+    - UI muestra errores de autorizacion sin bloquear la sesion.
 
-- [ ] TASK-023: Implementar UI de carga de deck.
+- [x] TASK-023: Implementar UI de carga de deck.
   - Criterios de aceptación:
     - AC-001.
     - AC-002.
@@ -324,8 +339,15 @@
     - Metadatos obligatorios.
     - Estado de subida.
     - Bloqueo de reemplazo.
+  - Criterios de finalizaciÃ³n:
+    - UI de carga de deck list disponible despues de login.
+    - Cliente frontend consume `POST /api/decks/uploads` con `multipart/form-data`.
+    - Formulario solicita `storeId`, jugador, fecha, resultado, deck usado e imagen.
+    - Metadatos opcionales de torneo, evento, tipo de torneo y ubicacion disponibles.
+    - UI muestra estado de subida y errores de validacion.
+    - Pruebas frontend cubren carga exitosa y bloqueo sin imagen.
 
-- [ ] TASK-024: Implementar UI de revisión de extracción.
+- [x] TASK-024: Implementar UI de revisión de extracción.
   - Criterios de aceptación:
     - AC-003.
     - AC-004.
@@ -335,8 +357,17 @@
     - Corrección.
     - Entradas no resueltas.
     - Confirmación de revisión.
+  - Criterios de finalización:
+    - UI de revisión OCR disponible después de login.
+    - Cliente frontend consume `POST /api/decks/{deckId}/extract`.
+    - Cliente frontend consume `PUT /api/decks/{deckId}/cards`.
+    - Cliente frontend consume `POST /api/decks/{deckId}/resolve-card-names`.
+    - Cliente frontend consume `POST /api/decks/{deckId}/review/confirm`.
+    - UI permite corregir sección, cantidad, nombre original y orden.
+    - UI muestra texto OCR original y resultados resueltos, ambiguos y no resueltos.
+    - Pruebas frontend cubren corrección, resolución y confirmación de revisión.
 
-- [ ] TASK-025: Implementar UI de configuración de tienda.
+- [x] TASK-025: Implementar UI de configuración de tienda.
   - Criterios de aceptación:
     - AC-010.
     - AC-026.
@@ -346,16 +377,39 @@
     - Logos.
     - Fondo propio.
     - Color de fondo.
+  - Criterios de finalización:
+    - UI de configuración de tienda disponible después de login.
+    - Cliente frontend consume `GET /api/stores/{storeId}`.
+    - Cliente frontend consume `PUT /api/stores/{storeId}`.
+    - Cliente frontend consume `POST /api/stores/{storeId}/assets`.
+    - UI permite editar nombre de tienda, texto fuente y color de fondo.
+    - UI permite asociar logo primario, logo secundario y fondo propio mediante assets.
+    - UI permite subir logos `STORE_LOGO` y fondo `BACKGROUND_IMAGE` como assets permanentes.
+    - Pruebas frontend cubren consulta, actualización base, logos, fondo propio y color.
 
-- [ ] TASK-026: Implementar UI de eventos, torneos y redes sociales.
+- [x] TASK-026: Implementar UI de eventos, torneos y redes sociales.
   - Criterios de aceptación:
     - AC-010.
   - Pruebas:
     - Tipos de eventos.
     - Tipos de torneos.
     - Redes sociales.
+  - Criterios de finalización:
+    - UI de eventos, torneos y redes disponible después de login.
+    - Cliente frontend consume `GET /api/stores/{storeId}/event-types`.
+    - Cliente frontend consume `POST /api/stores/{storeId}/event-types`.
+    - Cliente frontend consume `PUT /api/stores/{storeId}/event-types/{eventTypeId}`.
+    - Cliente frontend consume `GET /api/stores/{storeId}/tournament-types`.
+    - Cliente frontend consume `POST /api/stores/{storeId}/tournament-types`.
+    - Cliente frontend consume `PUT /api/stores/{storeId}/tournament-types/{tournamentTypeId}`.
+    - Cliente frontend consume `GET /api/stores/{storeId}/social-links`.
+    - Cliente frontend consume `PUT /api/stores/{storeId}/social-links`.
+    - UI permite listar y crear tipos de eventos.
+    - UI permite listar y crear tipos de torneos.
+    - UI permite reemplazar redes sociales de la tienda.
+    - Pruebas frontend cubren tipos de eventos, tipos de torneos y redes sociales.
 
-- [ ] TASK-027: Implementar UI de previsualización de imagen generada.
+- [x] TASK-027: Implementar UI de previsualización de imagen generada.
   - Criterios de aceptación:
     - AC-009.
     - AC-028.
@@ -366,6 +420,14 @@
     - Previsualización.
     - Descarga.
     - Error por caché incompleta sin internet.
+  - Criterios de finalización:
+    - UI de imagen generada disponible después de login.
+    - Cliente frontend consume `POST /api/decks/{deckId}/cache-card-images`.
+    - Cliente frontend consume `POST /api/decks/{deckId}/generate-image`.
+    - UI permite cachear imágenes de cartas antes de generar la imagen final.
+    - UI muestra faltantes de caché y errores de generación.
+    - UI muestra previsualización y enlace de descarga para la imagen generada.
+    - Pruebas frontend cubren previsualización, descarga y caché incompleta.
 
 ## Fase 5: Documentación y verificación
 

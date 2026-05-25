@@ -1,0 +1,210 @@
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
+
+export type UploadDeckInput = {
+  storeId: string;
+  playerName: string;
+  tournamentDate: string;
+  resultLabel: string;
+  deckName: string;
+  tournamentName?: string;
+  eventTypeId?: string;
+  tournamentTypeId?: string;
+  location?: string;
+  deckListImage: File;
+};
+
+export type UploadDeckResponse = {
+  deckId: string;
+  playerId: string;
+  tournamentId: string;
+  uploadedImageAssetId: string;
+  status: string;
+  extractionStatus: string;
+  reviewStatus: string;
+};
+
+export type DeckSection = "MAIN" | "EXTRA" | "SIDE";
+
+export type EditableDeckCard = {
+  section: DeckSection;
+  quantity: number;
+  originalName: string;
+  displayOrder: number;
+};
+
+export type ExtractDeckResponse = {
+  deckId: string;
+  status: string;
+  extractionStatus: string;
+  rawOcrText: string;
+  cards: EditableDeckCard[];
+};
+
+export type ResolveCardNamesResponse = {
+  deckId: string;
+  resolved: number;
+  ambiguous: number;
+  unresolved: number;
+  cards: Array<{
+    deckCardId: string;
+    originalName: string;
+    resolutionStatus: "RESOLVED" | "AMBIGUOUS" | "UNRESOLVED";
+    resolvedEnglishName?: string | null;
+    cardId?: string | null;
+  }>;
+};
+
+export type ConfirmDeckReviewResponse = {
+  deckId: string;
+  status: string;
+  reviewStatus: string;
+  cardCount: number;
+};
+
+export type CacheCardImagesResponse = {
+  deckId: string;
+  cached: Array<{
+    cardId: string;
+    officialName: string;
+    imageAssetId: string;
+    storagePath: string;
+  }>;
+  alreadyCached: Array<{
+    cardId: string;
+    officialName: string;
+    imageAssetId: string;
+    storagePath: string;
+  }>;
+  missing: Array<{
+    cardId?: string;
+    officialName?: string;
+    reason?: string;
+  }>;
+};
+
+export type GenerateDeckImageResponse = {
+  deckId: string;
+  generatedImageId: string;
+  imageAssetId: string;
+  storagePath: string;
+  width: number;
+  height: number;
+  mimeType: string;
+  status: string;
+};
+
+async function parseJsonResponse<T>(response: Response): Promise<T> {
+  const payload = (await response.json().catch(() => ({}))) as { message?: string | string[] };
+
+  if (!response.ok) {
+    const message = Array.isArray(payload.message) ? payload.message.join(" ") : payload.message;
+    throw new Error(message || "La solicitud no pudo completarse.");
+  }
+
+  return payload as T;
+}
+
+export const deckApi = {
+  async uploadDeckList(accessToken: string, input: UploadDeckInput) {
+    const formData = new FormData();
+    formData.append("storeId", input.storeId);
+    formData.append("playerName", input.playerName);
+    formData.append("tournamentDate", input.tournamentDate);
+    formData.append("resultLabel", input.resultLabel);
+    formData.append("deckName", input.deckName);
+    formData.append("deckListImage", input.deckListImage);
+
+    const optionalFields = {
+      tournamentName: input.tournamentName,
+      eventTypeId: input.eventTypeId,
+      tournamentTypeId: input.tournamentTypeId,
+      location: input.location
+    };
+
+    Object.entries(optionalFields).forEach(([key, value]) => {
+      const trimmedValue = value?.trim();
+
+      if (trimmedValue) {
+        formData.append(key, trimmedValue);
+      }
+    });
+
+    const response = await fetch(`${API_BASE_URL}/decks/uploads`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: formData
+    });
+
+    return parseJsonResponse<UploadDeckResponse>(response);
+  },
+
+  async extractDeckList(accessToken: string, deckId: string) {
+    const response = await fetch(`${API_BASE_URL}/decks/${deckId}/extract`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    return parseJsonResponse<ExtractDeckResponse>(response);
+  },
+
+  async updateDeckCards(accessToken: string, deckId: string, cards: EditableDeckCard[]) {
+    const response = await fetch(`${API_BASE_URL}/decks/${deckId}/cards`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({ cards })
+    });
+
+    return parseJsonResponse<ExtractDeckResponse>(response);
+  },
+
+  async resolveCardNames(accessToken: string, deckId: string) {
+    const response = await fetch(`${API_BASE_URL}/decks/${deckId}/resolve-card-names`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    return parseJsonResponse<ResolveCardNamesResponse>(response);
+  },
+
+  async confirmDeckReview(accessToken: string, deckId: string) {
+    const response = await fetch(`${API_BASE_URL}/decks/${deckId}/review/confirm`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    return parseJsonResponse<ConfirmDeckReviewResponse>(response);
+  },
+
+  async cacheCardImages(accessToken: string, deckId: string) {
+    const response = await fetch(`${API_BASE_URL}/decks/${deckId}/cache-card-images`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    return parseJsonResponse<CacheCardImagesResponse>(response);
+  },
+
+  async generateDeckImage(accessToken: string, deckId: string) {
+    const response = await fetch(`${API_BASE_URL}/decks/${deckId}/generate-image`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    return parseJsonResponse<GenerateDeckImageResponse>(response);
+  }
+};

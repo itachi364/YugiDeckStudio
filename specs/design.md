@@ -366,44 +366,47 @@ Políticas de retención propuestas:
 - `temporary_cleanup_allowed` para deck lists subidos e imágenes generadas.
 - `permanent` para cartas, logos de tienda, logos de evento, logos/iconos de redes sociales y fondos activos.
 
-## 7. Propuesta de API
+## 7. API documentada
 
-Los contratos finales de API deben documentarse antes de la implementación. Endpoints candidatos iniciales:
+Los contratos finales de API estan documentados en `specs/api-contract.md`. Endpoints principales de `v0.1.0`:
 
 - `POST /api/decks/uploads`
-- `GET /api/decks/{deckId}`
 - `POST /api/decks/{deckId}/extract`
 - `PUT /api/decks/{deckId}/cards`
+- `POST /api/decks/{deckId}/resolve-card-names`
+- `POST /api/decks/{deckId}/cache-card-images`
 - `POST /api/decks/{deckId}/generate-image`
-- `GET /api/decks/{deckId}/generated-image`
-- `GET /api/stores/current`
-- `PUT /api/stores/current`
-- `GET /api/stores/current/social-links`
-- `PUT /api/stores/current/social-links`
+- `POST /api/decks/{deckId}/inactivate`
+- `GET /api/stores/{storeId}`
+- `PUT /api/stores/{storeId}`
+- `POST /api/stores/{storeId}/assets`
+- `GET /api/stores/{storeId}/event-types`
+- `POST /api/stores/{storeId}/event-types`
+- `PUT /api/stores/{storeId}/event-types/{eventTypeId}`
+- `GET /api/stores/{storeId}/tournament-types`
+- `POST /api/stores/{storeId}/tournament-types`
+- `PUT /api/stores/{storeId}/tournament-types/{tournamentTypeId}`
+- `GET /api/stores/{storeId}/social-links`
+- `PUT /api/stores/{storeId}/social-links`
 - `POST /api/auth/register`
 - `POST /api/auth/login`
+- `POST /api/auth/change-password`
 - `POST /api/auth/root/initialize`
 - `POST /api/auth/root/store-admin`
-- `GET /api/users`
-- `POST /api/users`
-- `PUT /api/users/{userId}`
-- `GET /api/roles`
-- `POST /api/roles`
-- `PUT /api/roles/{roleId}`
-- `GET /api/permissions`
-- `PUT /api/roles/{roleId}/permissions`
-- `PUT /api/users/{userId}/roles`
-- `GET /api/event-types`
-- `POST /api/event-types`
-- `PUT /api/event-types/{eventTypeId}`
-- `GET /api/tournament-types`
-- `POST /api/tournament-types`
-- `PUT /api/tournament-types/{tournamentTypeId}`
+- `GET /api/auth/users`
+- `GET /api/auth/roles`
+- `POST /api/auth/roles`
+- `PUT /api/auth/roles/{roleId}`
+- `GET /api/auth/permissions`
+- `POST /api/auth/permissions`
+- `PUT /api/auth/permissions/{permissionId}`
+- `PUT /api/auth/roles/{roleId}/permissions`
+- `PUT /api/auth/users/{userId}/roles`
 - `POST /api/maintenance/image-cleanup/run`
 
 ## 7.1 Diseño de configuración de tienda
 
-Mientras autenticación y aislamiento se implementan en tareas posteriores, la configuración recibe `store_id` explícito por ruta.
+La configuracion recibe `store_id` explicito por ruta y el backend valida el alcance de tienda contra el usuario autenticado, salvo para `root`.
 
 El módulo de tiendas debe permitir:
 

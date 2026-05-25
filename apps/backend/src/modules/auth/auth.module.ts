@@ -8,6 +8,7 @@ import { ConfigureFirstStoreAdminUseCase } from "./application/configure-first-s
 import { ConfigurePermissionsUseCase } from "./application/configure-permissions.use-case";
 import { ConfigureRolesUseCase } from "./application/configure-roles.use-case";
 import { InitializeRootUserUseCase } from "./application/initialize-root-user.use-case";
+import { ListUsersUseCase } from "./application/list-users.use-case";
 import { LoginUseCase } from "./application/login.use-case";
 import { RegisterUserUseCase } from "./application/register-user.use-case";
 import { StoreAccessPolicyService } from "./application/store-access-policy.service";
@@ -33,6 +34,7 @@ import { PASSWORD_HASHER_PORT } from "./ports/password-hasher.port";
     ConfigureFirstStoreAdminUseCase,
     ConfigureRolesUseCase,
     ConfigurePermissionsUseCase,
+    ListUsersUseCase,
     AssignPermissionsToRoleUseCase,
     AssignRolesToUserUseCase,
     StoreAccessPolicyService,

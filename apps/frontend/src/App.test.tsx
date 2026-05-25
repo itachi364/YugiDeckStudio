@@ -1,19 +1,1189 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
-describe("App", () => {
-  it("renders the local dashboard", () => {
-    const queryClient = new QueryClient();
+const fetchMock = vi.fn();
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
+function renderApp() {
+  const queryClient = new QueryClient();
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <App />
+    </QueryClientProvider>
+  );
+}
+
+function mockJsonResponse(body: unknown, ok = true) {
+  return Promise.resolve({
+    ok,
+    json: () => Promise.resolve(body)
+  } as Response);
+}
+
+async function queueSecurityLists() {
+  fetchMock
+    .mockResolvedValueOnce(
+      await mockJsonResponse([
+        {
+          id: "root-id",
+          username: "root",
+          displayName: "Root",
+          storeId: null,
+          isRoot: true,
+          mustChangePassword: false,
+          isActive: true,
+          store: null,
+          userRoles: [
+            {
+              role: {
+                id: "role-root",
+                name: "root",
+                isSystemRole: true
+              }
+            }
+          ]
+        }
+      ])
+    )
+    .mockResolvedValueOnce(
+      await mockJsonResponse([
+        {
+          id: "role-root",
+          name: "root",
+          description: "Root",
+          isSystemRole: true,
+          rolePermissions: []
+        }
+      ])
+    )
+    .mockResolvedValueOnce(
+      await mockJsonResponse([
+        {
+          id: "permission-security",
+          code: "security.manage",
+          description: "Administrar seguridad"
+        }
+      ])
+    );
+}
+
+async function loginAndOpenDeckReview(user: ReturnType<typeof userEvent.setup>) {
+  fetchMock.mockResolvedValueOnce(
+    await mockJsonResponse({
+      accessToken: "operator-token",
+      expiresIn: "1d",
+      user: {
+        id: "operator-id",
+        username: "operator",
+        displayName: "Operator",
+        storeId: "store-id",
+        isRoot: false,
+        mustChangePassword: false,
+        roles: ["operator"]
+      }
+    })
+  );
+  await queueSecurityLists();
+
+  renderApp();
+
+  await user.type(screen.getByLabelText(/usuario/i), "operator");
+  await user.type(screen.getByLabelText(/contrasena/i), "Operator123!");
+  await user.click(screen.getByRole("button", { name: /entrar/i }));
+  await user.click(await screen.findByRole("button", { name: /revision/i }));
+
+  expect(await screen.findByRole("heading", { name: /revision de extraccion/i })).toBeInTheDocument();
+}
+
+async function loginAndOpenStoreConfiguration(user: ReturnType<typeof userEvent.setup>) {
+  fetchMock.mockResolvedValueOnce(
+    await mockJsonResponse({
+      accessToken: "admin-token",
+      expiresIn: "1d",
+      user: {
+        id: "admin-id",
+        username: "admin",
+        displayName: "Store Admin",
+        storeId: "store-id",
+        isRoot: false,
+        mustChangePassword: false,
+        roles: ["store_admin"]
+      }
+    })
+  );
+  await queueSecurityLists();
+
+  renderApp();
+
+  await user.type(screen.getByLabelText(/usuario/i), "admin");
+  await user.type(screen.getByLabelText(/contrasena/i), "Admin123!");
+  await user.click(screen.getByRole("button", { name: /entrar/i }));
+  await user.click(await screen.findByRole("button", { name: /tienda/i }));
+
+  expect(await screen.findByRole("form", { name: /configuracion base de tienda/i })).toBeInTheDocument();
+}
+
+async function loginAndOpenCatalogs(user: ReturnType<typeof userEvent.setup>) {
+  fetchMock.mockResolvedValueOnce(
+    await mockJsonResponse({
+      accessToken: "admin-token",
+      expiresIn: "1d",
+      user: {
+        id: "admin-id",
+        username: "admin",
+        displayName: "Store Admin",
+        storeId: "store-id",
+        isRoot: false,
+        mustChangePassword: false,
+        roles: ["store_admin"]
+      }
+    })
+  );
+  await queueSecurityLists();
+
+  renderApp();
+
+  await user.type(screen.getByLabelText(/usuario/i), "admin");
+  await user.type(screen.getByLabelText(/contrasena/i), "Admin123!");
+  await user.click(screen.getByRole("button", { name: /entrar/i }));
+  await user.click(await screen.findByRole("button", { name: /eventos/i }));
+
+  expect(await screen.findByRole("heading", { name: /eventos y redes/i })).toBeInTheDocument();
+}
+
+async function loginAndOpenDeckPreview(user: ReturnType<typeof userEvent.setup>) {
+  fetchMock.mockResolvedValueOnce(
+    await mockJsonResponse({
+      accessToken: "operator-token",
+      expiresIn: "1d",
+      user: {
+        id: "operator-id",
+        username: "operator",
+        displayName: "Operator",
+        storeId: "store-id",
+        isRoot: false,
+        mustChangePassword: false,
+        roles: ["operator"]
+      }
+    })
+  );
+  await queueSecurityLists();
+
+  renderApp();
+
+  await user.type(screen.getByLabelText(/usuario/i), "operator");
+  await user.type(screen.getByLabelText(/contrasena/i), "Operator123!");
+  await user.click(screen.getByRole("button", { name: /entrar/i }));
+  await user.click(await screen.findByRole("button", { name: /imagen/i }));
+
+  expect(await screen.findByRole("heading", { name: /imagen generada/i })).toBeInTheDocument();
+}
+
+describe("App", () => {
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  it("renders the local login form", () => {
+    renderApp();
+
+    expect(screen.getByRole("heading", { name: /login local/i })).toBeInTheDocument();
+    expect(screen.getByRole("form", { name: /login local/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /entrar/i })).toBeInTheDocument();
+  });
+
+  it("registers an operator with required store and user data", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(
+      await mockJsonResponse({
+        userId: "user-id",
+        username: "operator1",
+        storeId: "store-id",
+        roles: ["operator"]
+      })
     );
 
-    expect(screen.getByRole("heading", { name: /panel inicial/i })).toBeInTheDocument();
-    expect(screen.getByText(/local-only/i)).toBeInTheDocument();
-    expect(screen.getByText(/cargar deck list/i)).toBeInTheDocument();
+    renderApp();
+
+    await user.click(screen.getByRole("button", { name: /registro/i }));
+    await user.type(screen.getByLabelText(/store id/i), "store-id");
+    await user.type(screen.getByLabelText(/^usuario$/i), "operator1");
+    await user.type(screen.getByLabelText(/nombre visible/i), "Operator One");
+    await user.type(screen.getByLabelText(/email/i), "operator@example.com");
+    await user.type(screen.getByLabelText(/^contrasena$/i), "Operator123!");
+    await user.click(screen.getByRole("button", { name: /registrar/i }));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/register",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          storeId: "store-id",
+          username: "operator1",
+          password: "Operator123!",
+          displayName: "Operator One",
+          email: "operator@example.com"
+        })
+      })
+    );
+    expect(await screen.findByText(/usuario operator1 registrado como operator/i)).toBeInTheDocument();
+  });
+
+  it("forces password change when login returns mustChangePassword", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        accessToken: "jwt-token",
+        expiresIn: "1d",
+        user: {
+          id: "root-id",
+          username: "root",
+          displayName: "Root",
+          storeId: null,
+          isRoot: true,
+          mustChangePassword: true,
+          roles: ["root"]
+        }
+      })
+    );
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        userId: "root-id",
+        mustChangePassword: false
+      })
+    );
+    await queueSecurityLists();
+
+    renderApp();
+
+    await user.type(screen.getByLabelText(/usuario/i), "root");
+    await user.type(screen.getByLabelText(/contrasena/i), "ChangeMe123!");
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
+
+    expect(await screen.findByRole("heading", { name: /cambiar contrasena/i })).toBeInTheDocument();
+    expect(screen.getByText(/debes cambiar la contrasena antes de continuar/i)).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/contrasena actual/i), "ChangeMe123!");
+    await user.type(screen.getByLabelText(/nueva contrasena/i), "NewPassword123!");
+    await user.click(screen.getByRole("button", { name: /actualizar/i }));
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/auth/change-password",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer jwt-token"
+        }),
+        body: JSON.stringify({
+          currentPassword: "ChangeMe123!",
+          newPassword: "NewPassword123!"
+        })
+      })
+    );
+    expect(await screen.findByText(/contrasena actualizada/i)).toBeInTheDocument();
+  });
+
+  it("loads the security workspace after login", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        accessToken: "jwt-token",
+        expiresIn: "1d",
+        user: {
+          id: "root-id",
+          username: "root",
+          displayName: "Root",
+          storeId: null,
+          isRoot: true,
+          mustChangePassword: false,
+          roles: ["root"]
+        }
+      })
+    );
+    await queueSecurityLists();
+
+    renderApp();
+
+    await user.type(screen.getByLabelText(/usuario/i), "root");
+    await user.type(screen.getByLabelText(/contrasena/i), "ChangedPassword123!");
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
+
+    expect(await screen.findByRole("heading", { name: /seguridad local/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /usuarios, roles y permisos/i })).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/users",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer jwt-token"
+        })
+      })
+    );
+  });
+
+  it("creates roles and permissions from the security workspace", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        accessToken: "jwt-token",
+        expiresIn: "1d",
+        user: {
+          id: "root-id",
+          username: "root",
+          displayName: "Root",
+          storeId: null,
+          isRoot: true,
+          mustChangePassword: false,
+          roles: ["root"]
+        }
+      })
+    );
+    await queueSecurityLists();
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        id: "role-judge",
+        name: "judge",
+        isSystemRole: false
+      })
+    );
+    await queueSecurityLists();
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        id: "permission-judge",
+        code: "judge.manage"
+      })
+    );
+    await queueSecurityLists();
+
+    renderApp();
+
+    await user.type(screen.getByLabelText(/usuario/i), "root");
+    await user.type(screen.getByLabelText(/contrasena/i), "ChangedPassword123!");
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
+
+    await user.type(await screen.findByLabelText(/^nombre$/i), "judge");
+    await user.type(screen.getAllByLabelText(/^descripcion$/i)[0], "Gestionar jueces");
+    await user.click(screen.getByRole("button", { name: /crear rol/i }));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/roles",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          name: "judge",
+          description: "Gestionar jueces",
+          isSystemRole: false
+        })
+      })
+    );
+
+    await user.type(screen.getByLabelText(/^codigo$/i), "judge.manage");
+    await user.type(screen.getAllByLabelText(/^descripcion$/i)[1], "Gestionar jueces");
+    await user.click(screen.getByRole("button", { name: /crear permiso/i }));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/permissions",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          code: "judge.manage",
+          description: "Gestionar jueces"
+        })
+      })
+    );
+  });
+
+  it("shows access denied errors in the security workspace", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        accessToken: "operator-token",
+        expiresIn: "1d",
+        user: {
+          id: "operator-id",
+          username: "operator",
+          displayName: "Operator",
+          storeId: "store-id",
+          isRoot: false,
+          mustChangePassword: false,
+          roles: ["operator"]
+        }
+      })
+    );
+    fetchMock.mockResolvedValueOnce(await mockJsonResponse({ message: "Forbidden" }, false));
+    fetchMock.mockResolvedValueOnce(await mockJsonResponse({ message: "Forbidden" }, false));
+    fetchMock.mockResolvedValueOnce(await mockJsonResponse({ message: "Forbidden" }, false));
+
+    renderApp();
+
+    await user.type(screen.getByLabelText(/usuario/i), "operator");
+    await user.type(screen.getByLabelText(/contrasena/i), "Operator123!");
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
+
+    expect(await screen.findByText(/forbidden/i)).toBeInTheDocument();
+  });
+
+  it("uploads a deck list image with required metadata", async () => {
+    const user = userEvent.setup();
+    const deckImage = new File(["deck"], "deck.png", { type: "image/png" });
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        accessToken: "operator-token",
+        expiresIn: "1d",
+        user: {
+          id: "operator-id",
+          username: "operator",
+          displayName: "Operator",
+          storeId: "store-id",
+          isRoot: false,
+          mustChangePassword: false,
+          roles: ["operator"]
+        }
+      })
+    );
+    await queueSecurityLists();
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        deckId: "deck-id",
+        playerId: "player-id",
+        tournamentId: "tournament-id",
+        uploadedImageAssetId: "asset-id",
+        status: "UPLOADED",
+        extractionStatus: "PENDING",
+        reviewStatus: "PENDING"
+      })
+    );
+
+    renderApp();
+
+    await user.type(screen.getByLabelText(/usuario/i), "operator");
+    await user.type(screen.getByLabelText(/contrasena/i), "Operator123!");
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
+    await user.click(await screen.findByRole("button", { name: /decks/i }));
+
+    expect(await screen.findByRole("heading", { name: /carga de deck/i })).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/jugador/i), "Kaihuang Zhang");
+    await user.type(screen.getByLabelText(/fecha del torneo/i), "2026-05-21");
+    await user.type(screen.getByLabelText(/resultado/i), "Top 8");
+    await user.type(screen.getByLabelText(/deck usado/i), "White Forest");
+    await user.type(screen.getByLabelText(/^torneo$/i), "Regional");
+    await user.upload(screen.getByLabelText(/imagen deck list/i), deckImage);
+    await user.click(screen.getByRole("button", { name: /cargar deck/i }));
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([url]) => url === "/api/decks/uploads")).toBe(true);
+    });
+
+    const uploadCall = fetchMock.mock.calls.find(([url]) => url === "/api/decks/uploads");
+    expect(uploadCall).toBeDefined();
+    expect(uploadCall?.[1]).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer operator-token"
+        })
+      })
+    );
+
+    const body = uploadCall?.[1]?.body as FormData;
+    expect(body.get("storeId")).toBe("store-id");
+    expect(body.get("playerName")).toBe("Kaihuang Zhang");
+    expect(body.get("tournamentDate")).toBe("2026-05-21");
+    expect(body.get("resultLabel")).toBe("Top 8");
+    expect(body.get("deckName")).toBe("White Forest");
+    expect(body.get("deckListImage")).toBe(deckImage);
+    expect(await screen.findByText(/deck cargado con estado uploaded/i)).toBeInTheDocument();
+  });
+
+  it("rejects deck upload without an image before calling the api", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        accessToken: "operator-token",
+        expiresIn: "1d",
+        user: {
+          id: "operator-id",
+          username: "operator",
+          displayName: "Operator",
+          storeId: "store-id",
+          isRoot: false,
+          mustChangePassword: false,
+          roles: ["operator"]
+        }
+      })
+    );
+    await queueSecurityLists();
+
+    renderApp();
+
+    await user.type(screen.getByLabelText(/usuario/i), "operator");
+    await user.type(screen.getByLabelText(/contrasena/i), "Operator123!");
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
+    await user.click(await screen.findByRole("button", { name: /decks/i }));
+
+    await user.type(screen.getByLabelText(/jugador/i), "Kaihuang Zhang");
+    await user.type(screen.getByLabelText(/fecha del torneo/i), "2026-05-21");
+    await user.type(screen.getByLabelText(/resultado/i), "Top 8");
+    await user.type(screen.getByLabelText(/deck usado/i), "White Forest");
+    await user.click(screen.getByRole("button", { name: /cargar deck/i }));
+
+    expect(await screen.findByText(/la imagen del deck list es obligatoria/i)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/decks/uploads")).toBe(false);
+  });
+
+  it("extracts deck cards and saves manual corrections", async () => {
+    const user = userEvent.setup();
+    await loginAndOpenDeckReview(user);
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        deckId: "deck-id",
+        status: "EXTRACTED",
+        extractionStatus: "EXTRACTED",
+        rawOcrText: "Main Deck\n3 Silvy del Bosque Blanco",
+        cards: [
+          {
+            section: "MAIN",
+            quantity: 3,
+            originalName: "Silvy del Bosque Blanco",
+            displayOrder: 1
+          }
+        ]
+      })
+    );
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        deckId: "deck-id",
+        status: "EXTRACTED",
+        extractionStatus: "EXTRACTED",
+        rawOcrText: "Main Deck\n3 Silvy del Bosque Blanco",
+        cards: [
+          {
+            section: "MAIN",
+            quantity: 3,
+            originalName: "Silvy, Sage of the White Forest",
+            displayOrder: 1
+          }
+        ]
+      })
+    );
+
+    await user.type(screen.getByLabelText(/deck id/i), "deck-id");
+    await user.click(screen.getByRole("button", { name: /ejecutar ocr/i }));
+
+    expect(await screen.findByText(/main deck/i)).toBeInTheDocument();
+    expect(await screen.findByDisplayValue(/silvy del bosque blanco/i)).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText(/nombre original/i));
+    await user.type(screen.getByLabelText(/nombre original/i), "Silvy, Sage of the White Forest");
+    await user.click(screen.getByRole("button", { name: /guardar correcciones/i }));
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([url]) => url === "/api/decks/deck-id/cards")).toBe(true);
+    });
+
+    const correctionCall = fetchMock.mock.calls.find(([url]) => url === "/api/decks/deck-id/cards");
+    expect(correctionCall?.[1]).toEqual(
+      expect.objectContaining({
+        method: "PUT",
+        headers: expect.objectContaining({
+          Authorization: "Bearer operator-token"
+        }),
+        body: JSON.stringify({
+          cards: [
+            {
+              section: "MAIN",
+              quantity: 3,
+              originalName: "Silvy, Sage of the White Forest",
+              displayOrder: 1
+            }
+          ]
+        })
+      })
+    );
+    expect(await screen.findByText(/correcciones guardadas/i)).toBeInTheDocument();
+  });
+
+  it("shows resolved, ambiguous and unresolved card name results", async () => {
+    const user = userEvent.setup();
+    await loginAndOpenDeckReview(user);
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        deckId: "deck-id",
+        status: "EXTRACTED",
+        extractionStatus: "EXTRACTED",
+        rawOcrText: "Main Deck\n1 Blue Eyes",
+        cards: [
+          {
+            section: "MAIN",
+            quantity: 1,
+            originalName: "Blue Eyes",
+            displayOrder: 1
+          }
+        ]
+      })
+    );
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        deckId: "deck-id",
+        resolved: 1,
+        ambiguous: 1,
+        unresolved: 1,
+        cards: [
+          {
+            deckCardId: "deck-card-1",
+            originalName: "Blue Eyes",
+            resolutionStatus: "RESOLVED",
+            resolvedEnglishName: "Blue-Eyes White Dragon",
+            cardId: "card-id"
+          },
+          {
+            deckCardId: "deck-card-2",
+            originalName: "Azamina",
+            resolutionStatus: "AMBIGUOUS",
+            resolvedEnglishName: null,
+            cardId: null
+          },
+          {
+            deckCardId: "deck-card-3",
+            originalName: "Nombre ilegible",
+            resolutionStatus: "UNRESOLVED",
+            resolvedEnglishName: null,
+            cardId: null
+          }
+        ]
+      })
+    );
+
+    await user.type(screen.getByLabelText(/deck id/i), "deck-id");
+    await user.click(screen.getByRole("button", { name: /ejecutar ocr/i }));
+    await screen.findByDisplayValue(/blue eyes/i);
+    await user.click(screen.getByRole("button", { name: /resolver nombres/i }));
+
+    expect(await screen.findByText(/resolucion: 1 resueltas, 1 ambiguas, 1 no resueltas/i)).toBeInTheDocument();
+    expect(screen.getByText(/blue-eyes white dragon/i)).toBeInTheDocument();
+    expect(screen.getByText(/ambiguous/i)).toBeInTheDocument();
+    expect(screen.getByText(/unresolved/i)).toBeInTheDocument();
+  });
+
+  it("confirms the OCR review after extraction", async () => {
+    const user = userEvent.setup();
+    await loginAndOpenDeckReview(user);
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        deckId: "deck-id",
+        status: "EXTRACTED",
+        extractionStatus: "EXTRACTED",
+        rawOcrText: "Main Deck\n1 Diabellstar",
+        cards: [
+          {
+            section: "MAIN",
+            quantity: 1,
+            originalName: "Diabellstar",
+            displayOrder: 1
+          }
+        ]
+      })
+    );
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        deckId: "deck-id",
+        status: "REVIEWED",
+        reviewStatus: "CONFIRMED",
+        cardCount: 1
+      })
+    );
+
+    await user.type(screen.getByLabelText(/deck id/i), "deck-id");
+    await user.click(screen.getByRole("button", { name: /ejecutar ocr/i }));
+    await screen.findByDisplayValue(/diabellstar/i);
+    await user.click(screen.getByRole("button", { name: /confirmar revision/i }));
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([url]) => url === "/api/decks/deck-id/review/confirm")).toBe(true);
+    });
+    expect(await screen.findByText(/revision confirmada con 1 cartas/i)).toBeInTheDocument();
+    expect(screen.getByText(/confirmed/i)).toBeInTheDocument();
+  });
+
+  it("loads store configuration with branding data", async () => {
+    const user = userEvent.setup();
+    await loginAndOpenStoreConfiguration(user);
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        id: "store-id",
+        name: "Ready For Duel",
+        primaryLogoAssetId: "primary-logo-id",
+        secondaryLogoAssetId: "secondary-logo-id",
+        backgroundImageAssetId: "background-id",
+        backgroundColor: "#10131a",
+        sourceCreditText: "ReadyForDuel",
+        socialLinks: [],
+        eventTypes: [],
+        tournamentTypes: []
+      })
+    );
+
+    await user.click(screen.getByRole("button", { name: /consultar/i }));
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([url]) => url === "/api/stores/store-id")).toBe(true);
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/stores/store-id",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer admin-token"
+        })
+      })
+    );
+    expect(await screen.findByDisplayValue(/ready for duel/i)).toBeInTheDocument();
+    expect(screen.getByDisplayValue("#10131a")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("ReadyForDuel")).toBeInTheDocument();
+  });
+
+  it("updates store name, credit text and background color", async () => {
+    const user = userEvent.setup();
+    await loginAndOpenStoreConfiguration(user);
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        id: "store-id",
+        name: "Ready For Duel",
+        primaryLogoAssetId: "primary-logo-id",
+        secondaryLogoAssetId: null,
+        backgroundImageAssetId: null,
+        backgroundColor: "#10131a",
+        sourceCreditText: "ReadyForDuel",
+        socialLinks: [],
+        eventTypes: [],
+        tournamentTypes: []
+      })
+    );
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        id: "store-id",
+        name: "Yugi Local Store",
+        primaryLogoAssetId: "primary-logo-id",
+        secondaryLogoAssetId: null,
+        backgroundImageAssetId: null,
+        backgroundColor: "#223344",
+        sourceCreditText: "YugiLocal",
+        socialLinks: [],
+        eventTypes: [],
+        tournamentTypes: []
+      })
+    );
+
+    await user.click(screen.getByRole("button", { name: /consultar/i }));
+    await screen.findByDisplayValue(/ready for duel/i);
+
+    await user.clear(screen.getByLabelText(/nombre de tienda/i));
+    await user.type(screen.getByLabelText(/nombre de tienda/i), "Yugi Local Store");
+    await user.clear(screen.getByLabelText(/color de fondo/i));
+    await user.type(screen.getByLabelText(/color de fondo/i), "#223344");
+    await user.clear(screen.getByLabelText(/texto fuente/i));
+    await user.type(screen.getByLabelText(/texto fuente/i), "YugiLocal");
+    await user.click(screen.getByRole("button", { name: /guardar configuracion/i }));
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([url, options]) => url === "/api/stores/store-id" && options?.method === "PUT")).toBe(true);
+    });
+
+    const updateCall = fetchMock.mock.calls.find(([url, options]) => url === "/api/stores/store-id" && options?.method === "PUT");
+    expect(updateCall?.[1]).toEqual(
+      expect.objectContaining({
+        method: "PUT",
+        headers: expect.objectContaining({
+          Authorization: "Bearer admin-token"
+        }),
+        body: JSON.stringify({
+          name: "Yugi Local Store",
+          sourceCreditText: "YugiLocal",
+          backgroundColor: "#223344",
+          primaryLogoAssetId: "primary-logo-id",
+          secondaryLogoAssetId: null,
+          backgroundImageAssetId: null
+        })
+      })
+    );
+    expect(await screen.findByText(/configuracion de tienda actualizada/i)).toBeInTheDocument();
+  });
+
+  it("uploads store logos and a custom background as permanent assets", async () => {
+    const user = userEvent.setup();
+    const logoFile = new File(["logo"], "logo.png", { type: "image/png" });
+    const backgroundFile = new File(["background"], "background.webp", { type: "image/webp" });
+    await loginAndOpenStoreConfiguration(user);
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        id: "store-id",
+        name: "Ready For Duel",
+        primaryLogoAssetId: null,
+        secondaryLogoAssetId: null,
+        backgroundImageAssetId: null,
+        backgroundColor: "#10131a",
+        sourceCreditText: "ReadyForDuel",
+        socialLinks: [],
+        eventTypes: [],
+        tournamentTypes: []
+      })
+    );
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        imageAssetId: "primary-logo-id",
+        category: "STORE_LOGO",
+        storagePath: "store-logos/primary-logo-id.png",
+        retentionPolicy: "PERMANENT"
+      })
+    );
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        imageAssetId: "background-id",
+        category: "BACKGROUND_IMAGE",
+        storagePath: "background-images/background-id.webp",
+        retentionPolicy: "PERMANENT"
+      })
+    );
+
+    await user.click(screen.getByRole("button", { name: /consultar/i }));
+    await screen.findByDisplayValue(/ready for duel/i);
+
+    const imageInputs = screen.getAllByLabelText(/^imagen$/i);
+    const uploadButtons = screen.getAllByRole("button", { name: /subir/i });
+
+    await user.upload(imageInputs[0], logoFile);
+    await user.click(uploadButtons[0]);
+    await user.upload(imageInputs[2], backgroundFile);
+    await user.click(uploadButtons[2]);
+
+    await waitFor(() => {
+      const uploadCalls = fetchMock.mock.calls.filter(([url]) => url === "/api/stores/store-id/assets");
+      expect(uploadCalls).toHaveLength(2);
+    });
+
+    const uploadCalls = fetchMock.mock.calls.filter(([url]) => url === "/api/stores/store-id/assets");
+    const logoBody = uploadCalls[0]?.[1]?.body as FormData;
+    const backgroundBody = uploadCalls[1]?.[1]?.body as FormData;
+    expect(logoBody.get("category")).toBe("STORE_LOGO");
+    expect(logoBody.get("image")).toBe(logoFile);
+    expect(backgroundBody.get("category")).toBe("BACKGROUND_IMAGE");
+    expect(backgroundBody.get("image")).toBe(backgroundFile);
+    expect(await screen.findByText(/background_image cargado como asset permanente/i)).toBeInTheDocument();
+  });
+
+  it("loads event types, tournament types and social links", async () => {
+    const user = userEvent.setup();
+    await loginAndOpenCatalogs(user);
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse([
+        {
+          id: "event-type-id",
+          storeId: "store-id",
+          name: "Regional",
+          description: "WCQ Regional",
+          logoAssetId: "event-logo-id",
+          isActive: true
+        }
+      ])
+    );
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse([
+        {
+          id: "tournament-type-id",
+          storeId: "store-id",
+          name: "Local",
+          description: "Torneo semanal",
+          logoAssetId: null,
+          isActive: true
+        }
+      ])
+    );
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse([
+        {
+          id: "social-id",
+          platform: "Instagram",
+          handle: "@readyforduel",
+          url: "https://instagram.com/readyforduel",
+          iconAssetId: "social-logo-id",
+          displayOrder: 1,
+          isActive: true
+        }
+      ])
+    );
+
+    await user.click(screen.getByRole("button", { name: /consultar/i }));
+
+    expect(await screen.findByText(/catalogos de tienda cargados/i)).toBeInTheDocument();
+    expect(screen.getByText(/wcq regional/i)).toBeInTheDocument();
+    expect(screen.getByText(/torneo semanal/i)).toBeInTheDocument();
+    expect(screen.getByDisplayValue(/@readyforduel/i)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/stores/store-id/event-types",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer admin-token"
+        })
+      })
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/stores/store-id/tournament-types",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer admin-token"
+        })
+      })
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/stores/store-id/social-links",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer admin-token"
+        })
+      })
+    );
+  });
+
+  it("creates event and tournament types", async () => {
+    const user = userEvent.setup();
+    await loginAndOpenCatalogs(user);
+    fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
+    fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
+    fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        id: "event-type-id",
+        storeId: "store-id",
+        name: "Regional",
+        description: "WCQ Regional",
+        logoAssetId: "event-logo-id",
+        isActive: true
+      })
+    );
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        id: "tournament-type-id",
+        storeId: "store-id",
+        name: "Local",
+        description: "Torneo semanal",
+        logoAssetId: null,
+        isActive: true
+      })
+    );
+
+    await user.click(screen.getByRole("button", { name: /consultar/i }));
+    await screen.findByText(/catalogos de tienda cargados/i);
+
+    await user.type(screen.getByLabelText(/evento nombre/i), "Regional");
+    await user.type(screen.getByLabelText(/evento descripcion/i), "WCQ Regional");
+    await user.type(screen.getByLabelText(/evento logo asset id/i), "event-logo-id");
+    await user.click(screen.getByRole("button", { name: /crear evento/i }));
+
+    await user.type(screen.getByLabelText(/torneo nombre/i), "Local");
+    await user.type(screen.getByLabelText(/torneo descripcion/i), "Torneo semanal");
+    await user.click(screen.getByRole("button", { name: /crear torneo/i }));
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([url, options]) => url === "/api/stores/store-id/event-types" && options?.method === "POST")).toBe(true);
+      expect(fetchMock.mock.calls.some(([url, options]) => url === "/api/stores/store-id/tournament-types" && options?.method === "POST")).toBe(true);
+    });
+
+    const eventCall = fetchMock.mock.calls.find(([url, options]) => url === "/api/stores/store-id/event-types" && options?.method === "POST");
+    const tournamentCall = fetchMock.mock.calls.find(([url, options]) => url === "/api/stores/store-id/tournament-types" && options?.method === "POST");
+    expect(eventCall?.[1]).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          name: "Regional",
+          description: "WCQ Regional",
+          logoAssetId: "event-logo-id",
+          isActive: true
+        })
+      })
+    );
+    expect(tournamentCall?.[1]).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          name: "Local",
+          description: "Torneo semanal",
+          logoAssetId: null,
+          isActive: true
+        })
+      })
+    );
+    expect(await screen.findByText(/tipo de torneo local creado/i)).toBeInTheDocument();
+  });
+
+  it("replaces store social links", async () => {
+    const user = userEvent.setup();
+    await loginAndOpenCatalogs(user);
+    fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
+    fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse([
+        {
+          id: "social-id",
+          platform: "Instagram",
+          handle: "@readyforduel",
+          url: "https://instagram.com/readyforduel",
+          iconAssetId: "social-logo-id",
+          displayOrder: 1,
+          isActive: true
+        }
+      ])
+    );
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse([
+        {
+          id: "social-id",
+          platform: "Instagram",
+          handle: "@yugistudio",
+          url: "https://instagram.com/yugistudio",
+          iconAssetId: "social-logo-id",
+          displayOrder: 1,
+          isActive: true
+        }
+      ])
+    );
+
+    await user.click(screen.getByRole("button", { name: /consultar/i }));
+    await screen.findByDisplayValue(/@readyforduel/i);
+
+    await user.clear(screen.getByLabelText(/handle/i));
+    await user.type(screen.getByLabelText(/handle/i), "@yugistudio");
+    await user.clear(screen.getByLabelText(/^url$/i));
+    await user.type(screen.getByLabelText(/^url$/i), "https://instagram.com/yugistudio");
+    await user.click(screen.getByRole("button", { name: /guardar redes/i }));
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([url, options]) => url === "/api/stores/store-id/social-links" && options?.method === "PUT")).toBe(true);
+    });
+
+    const socialCall = fetchMock.mock.calls.find(([url, options]) => url === "/api/stores/store-id/social-links" && options?.method === "PUT");
+    expect(socialCall?.[1]).toEqual(
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({
+          links: [
+            {
+              platform: "Instagram",
+              handle: "@yugistudio",
+              url: "https://instagram.com/yugistudio",
+              iconAssetId: "social-logo-id",
+              displayOrder: 1,
+              isActive: true
+            }
+          ]
+        })
+      })
+    );
+    expect(await screen.findByText(/1 redes sociales guardadas/i)).toBeInTheDocument();
+  });
+
+  it("generates and previews the final deck image", async () => {
+    const user = userEvent.setup();
+    await loginAndOpenDeckPreview(user);
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        deckId: "deck-id",
+        generatedImageId: "generated-id",
+        imageAssetId: "asset-id",
+        storagePath: "generated-deck-images/deck.png",
+        width: 1080,
+        height: 1350,
+        mimeType: "image/png",
+        status: "IMAGE_GENERATED"
+      })
+    );
+
+    await user.type(screen.getByLabelText(/deck id/i), "deck-id");
+    await user.click(screen.getByRole("button", { name: /generar imagen/i }));
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([url]) => url === "/api/decks/deck-id/generate-image")).toBe(true);
+    });
+
+    const generateCall = fetchMock.mock.calls.find(([url]) => url === "/api/decks/deck-id/generate-image");
+    expect(generateCall?.[1]).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer operator-token"
+        })
+      })
+    );
+    expect(await screen.findByText(/imagen generada 1080x1350/i)).toBeInTheDocument();
+    expect(screen.getByAltText(/imagen generada del deck/i)).toHaveAttribute(
+      "src",
+      "http://127.0.0.1:8081/generated-deck-images/deck.png"
+    );
+  });
+
+  it("exposes a PNG download link after image generation", async () => {
+    const user = userEvent.setup();
+    await loginAndOpenDeckPreview(user);
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        deckId: "deck-id",
+        generatedImageId: "generated-id",
+        imageAssetId: "asset-id",
+        storagePath: "generated-deck-images/deck.png",
+        width: 1080,
+        height: 1350,
+        mimeType: "image/png",
+        status: "IMAGE_GENERATED"
+      })
+    );
+
+    await user.type(screen.getByLabelText(/deck id/i), "deck-id");
+    await user.click(screen.getByRole("button", { name: /generar imagen/i }));
+
+    const downloadLink = await screen.findByRole("link", { name: /descargar png/i });
+    expect(downloadLink).toHaveAttribute("href", "http://127.0.0.1:8081/generated-deck-images/deck.png");
+    expect(downloadLink).toHaveAttribute("download");
+  });
+
+  it("shows missing cached cards before generating the final image", async () => {
+    const user = userEvent.setup();
+    await loginAndOpenDeckPreview(user);
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        deckId: "deck-id",
+        cached: [],
+        alreadyCached: [],
+        missing: [
+          {
+            cardId: "card-id",
+            officialName: "Blue-Eyes White Dragon",
+            reason: "No hay conexion a YGOPRODeck y la imagen no existe en cache."
+          }
+        ]
+      })
+    );
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse(
+        {
+          message: "No se puede generar la imagen porque faltan imagenes cacheadas."
+        },
+        false
+      )
+    );
+
+    await user.type(screen.getByLabelText(/deck id/i), "deck-id");
+    await user.click(screen.getByRole("button", { name: /cachear cartas/i }));
+
+    expect(await screen.findByText(/cache de cartas: 0 nuevas, 0 existentes, 1 faltantes/i)).toBeInTheDocument();
+    expect(screen.getByText(/blue-eyes white dragon/i)).toBeInTheDocument();
+    expect(screen.getByText(/no hay conexion a ygoprodeck/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /generar imagen/i }));
+
+    expect(await screen.findByText(/no se puede generar la imagen porque faltan imagenes cacheadas/i)).toBeInTheDocument();
   });
 });
