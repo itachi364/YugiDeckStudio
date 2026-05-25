@@ -119,11 +119,11 @@ La aplicación debe persistir metadatos de deck list subida, jugador, torneo, de
 
 La aplicación debe generar una imagen compartible similar a la referencia visual suministrada.
 
-La imagen generada debe incluir Main Deck, Extra Deck, Side Deck, nombre del jugador, fecha del torneo, resultado, nombre del deck, tipo de evento o torneo cuando aplique, logos, redes sociales y texto fuente/crédito.
+La imagen generada debe incluir Main Deck, Extra Deck, Side Deck, nombre del jugador, fecha del torneo, resultado, nombre del deck, tipo de evento o torneo cuando aplique, logos, redes sociales y credito inferior/fuente del deck list.
 
 ### REQ-008: Configurar tienda, eventos, torneos y redes sociales
 
-La aplicación debe permitir configurar datos de tienda, logos, tipos de eventos, tipos de torneos, redes sociales, logos/iconos de redes sociales, texto de fuente/crédito, fondo propio y color de fondo.
+La aplicación debe permitir configurar datos de tienda, logos, tipos de eventos, tipos de torneos, redes sociales, logos/iconos de redes sociales, credito inferior/fuente del deck list, fondo propio y color de fondo.
 
 Los logos de tiendas, logos de eventos y logos/iconos de redes sociales se consideran assets permanentes y no deben ser eliminados por el proceso semanal de depuración.
 
@@ -309,7 +309,7 @@ Dada una URL de imagen de carta de YGOPRODeck, cuando la imagen se necesita por 
 
 ### AC-009: Contenido de imagen generada
 
-Dado un deck validado y una configuración de branding, cuando se genera la imagen, entonces el resultado incluye Main Deck, Extra Deck, Side Deck, nombre del jugador, fecha del torneo, resultado del torneo, nombre del deck, logos, redes sociales y texto de fuente/crédito.
+Dado un deck validado y una configuración de branding, cuando se genera la imagen, entonces el resultado incluye Main Deck, Extra Deck, Side Deck, nombre del jugador, fecha del torneo, resultado del torneo, nombre del deck, logos, redes sociales y credito inferior/fuente del deck list.
 
 ### AC-010: Configuración de tienda, eventos, torneos y redes
 
@@ -397,7 +397,9 @@ Dado un deck validado y una configuración de branding, cuando se genera la imag
 
 ### AC-031: Plantilla base parametrizable
 
-Dado que existe la plantilla base de `v0.1.0`, cuando se genera una imagen, entonces los logos, redes sociales, texto fuente/crédito, datos del torneo, datos del jugador y deck se renderizan usando parámetros configurables.
+Dado que existe la plantilla base de `v0.1.0`, cuando se genera una imagen, entonces los logos, redes sociales, credito inferior/fuente del deck list, datos del torneo, datos del jugador y deck se renderizan usando parámetros configurables.
+
+Dado que se renderiza el encabezado de la imagen, cuando existen datos del torneo, ubicacion, resultado y duelista, entonces el encabezado debe construirse con esos datos y no con el credito inferior.
 
 ### AC-032: Persistencia
 
@@ -452,6 +454,42 @@ Dado que una pantalla solicita seleccionar tienda, logos, tipos de evento o tipo
 Dado que un usuario no-root consulta listas desplegables de tienda o assets, cuando el backend responde, entonces solo debe devolver datos de su tienda vinculada.
 
 Dado que `root` consulta listas desplegables de tienda, cuando el backend responde, entonces puede recibir todas las tiendas existentes.
+
+### AC-040: Creacion de tienda desde configuracion
+
+Dado que `root` abre la configuracion de tienda y no existen tiendas creadas, cuando diligencia nombre de tienda y guarda, entonces el sistema crea la tienda sin exigir seleccionar una tienda previa.
+
+Dado que `root` abre la configuracion de tienda y existen tiendas creadas, cuando desea crear otra tienda, entonces debe poder cambiar a modo de creacion sin digitar manualmente IDs.
+
+Dado que un usuario no-root abre la configuracion de tienda, cuando no tiene una tienda vinculada, entonces el sistema debe bloquear la operacion; si tiene tienda vinculada, solo puede configurar su tienda.
+
+Dado que el formulario muestra el campo de credito inferior/fuente del deck list, cuando el usuario lo edita, entonces debe quedar claro que no corresponde al encabezado principal de la imagen.
+
+### AC-041: Permisos del volumen local de imagenes
+
+Dado que el backend se ejecuta como usuario no-root dentro de Docker, cuando sube deck lists, logos, fondos o imagenes generadas, entonces el volumen local de imagenes debe permitir crear carpetas y archivos sin ejecutar el backend como root.
+
+Dado que el volumen de imagenes ya existe con propietario incorrecto, cuando se levanta Docker Compose, entonces el entorno debe corregir la propiedad del volumen antes de iniciar backend e image-cleaner.
+
+### AC-042: Alcance de tienda en carga multipart de deck
+
+Dado que un usuario autenticado carga un deck list mediante `multipart/form-data`, cuando el formulario incluye `storeId`, entonces el backend debe validar el alcance de tienda despues de parsear el multipart y antes de persistir el deck.
+
+Dado que un usuario intenta cargar un deck para una tienda fuera de su alcance, cuando envia la solicitud multipart, entonces el sistema debe rechazar la operacion sin crear el deck.
+
+### AC-043: Alias de cartas en espanol y variantes OCR
+
+Dado que el OCR devuelve nombres en espanol o variantes con errores comunes de lectura, cuando se ejecuta la resolucion de nombres, entonces el sistema debe intentar convertirlos a un nombre oficial en ingles antes de consultar cache local o YGOPRODeck.
+
+Dado que un alias local coincide con una unica carta oficial, cuando se resuelve la carta, entonces debe quedar marcada como `RESOLVED` contra la carta oficial obtenida desde cache o YGOPRODeck.
+
+Dado que no existe alias ni coincidencia confiable, cuando se resuelve la carta, entonces debe conservarse como `UNRESOLVED` para correccion manual.
+
+### AC-044: OCR por regiones para plantilla KDE
+
+Dada una imagen de deck list con la plantilla KDE de tres columnas superiores y dos columnas inferiores, cuando se ejecuta OCR, entonces el sistema debe leer regiones separadas para monstruos, magicas, trampas, extra deck y side deck, y debe entregar el texto con encabezados de seccion para mejorar el parseo.
+
+Dado que el OCR por regiones no detecta texto util, cuando se ejecuta la extraccion, entonces el flujo conserva el comportamiento de marcar la extraccion como fallida y permitir correccion manual posterior.
 
 ## 8. Preguntas abiertas
 

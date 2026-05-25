@@ -308,6 +308,40 @@ Reglas:
 
 Devuelve configuracion de tienda, redes, tipos de eventos y tipos de torneos.
 
+### `POST /api/stores`
+
+Crea una tienda desde el modulo de configuracion.
+
+Body:
+
+```json
+{
+  "name": "Ready For Duel",
+  "backgroundColor": "#10131a",
+  "sourceCreditText": "Source: ReadyForDuel"
+}
+```
+
+Respuesta exitosa `201 Created`:
+
+```json
+{
+  "id": "uuid",
+  "name": "Ready For Duel",
+  "primaryLogoAssetId": null,
+  "secondaryLogoAssetId": null,
+  "backgroundImageAssetId": null,
+  "backgroundColor": "#10131a",
+  "sourceCreditText": "Source: ReadyForDuel"
+}
+```
+
+Reglas:
+
+- Requiere token valido de `root`.
+- No requiere seleccionar una tienda previa.
+- `sourceCreditText` representa el credito inferior o fuente del deck list, no el encabezado principal de la imagen.
+
 ### `PUT /api/stores/{storeId}`
 
 Actualiza configuracion base de tienda.

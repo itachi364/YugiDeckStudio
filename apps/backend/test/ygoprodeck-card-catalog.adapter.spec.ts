@@ -1,4 +1,5 @@
 import { ConfigService } from "@nestjs/config";
+import { CardNameAliasCatalog } from "../src/modules/decks/domain/card-name-alias-catalog";
 import { CardNameNormalizer } from "../src/modules/decks/domain/card-name-normalizer";
 import { YgoprodeckCardCatalogAdapter } from "../src/modules/decks/infrastructure/ygoprodeck-card-catalog.adapter";
 
@@ -6,6 +7,7 @@ describe("YgoprodeckCardCatalogAdapter", () => {
   const findMany = jest.fn();
   const upsert = jest.fn();
   const fetchMock = jest.fn();
+  const normalizer = new CardNameNormalizer();
 
   const adapter = new YgoprodeckCardCatalogAdapter(
     {
@@ -14,7 +16,8 @@ describe("YgoprodeckCardCatalogAdapter", () => {
         upsert
       }
     } as never,
-    new CardNameNormalizer(),
+    normalizer,
+    new CardNameAliasCatalog(normalizer),
     {
       get: jest.fn((key: string) => {
         const values: Record<string, string> = {
@@ -104,6 +107,38 @@ describe("YgoprodeckCardCatalogAdapter", () => {
         officialName: true
       }
     });
+  });
+
+  it("uses Spanish and OCR aliases before looking up YGOPRODeck", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 20260001,
+            name: "Deception of the Sinful Spoils",
+            type: "Spell Card",
+            frameType: "spell",
+            card_images: []
+          }
+        ]
+      })
+    });
+    upsert.mockResolvedValue({
+      id: "card-alias",
+      officialName: "Deception of the Sinful Spoils"
+    });
+
+    await expect(adapter.findCandidates("Engafio del Botin del Pecado")).resolves.toEqual([
+      {
+        id: "card-alias",
+        officialName: "Deception of the Sinful Spoils"
+      }
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://db.ygoprodeck.com/api/v7/cardinfo.php?name=Deception+of+the+Sinful+Spoils"
+    );
   });
 
   it("falls back to fuzzy search when exact lookup has no results", async () => {

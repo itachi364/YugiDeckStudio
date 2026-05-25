@@ -6,6 +6,7 @@ import { DeckScopeGuard } from "../auth/infrastructure/deck-scope.guard";
 import { CurrentUser } from "../auth/infrastructure/current-user.decorator";
 import { JwtAuthGuard } from "../auth/infrastructure/jwt-auth.guard";
 import { StoreScopeGuard } from "../auth/infrastructure/store-scope.guard";
+import { StoreAccessPolicyService } from "../auth/application/store-access-policy.service";
 import { AuthenticatedUserPayload } from "../auth/ports/auth-token.port";
 import { CacheCardImagesUseCase } from "./application/cache-card-images.use-case";
 import { ConfirmDeckReviewUseCase } from "./application/confirm-deck-review.use-case";
@@ -36,16 +37,23 @@ export class DecksController {
     private readonly resolveCardNamesUseCase: ResolveCardNamesUseCase,
     private readonly cacheCardImagesUseCase: CacheCardImagesUseCase,
     private readonly generateDeckImageUseCase: GenerateDeckImageUseCase,
-    private readonly inactivateDeckUseCase: InactivateDeckUseCase
+    private readonly inactivateDeckUseCase: InactivateDeckUseCase,
+    private readonly storeAccessPolicy: StoreAccessPolicyService
   ) {}
 
   @Post("uploads")
-  @UseGuards(JwtAuthGuard, StoreScopeGuard)
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor("deckListImage"))
-  uploadDeckList(@Body() body: UploadDeckListDto, @UploadedFile() file?: UploadedDeckListFile) {
+  uploadDeckList(
+    @Body() body: UploadDeckListDto,
+    @CurrentUser() user: AuthenticatedUserPayload,
+    @UploadedFile() file?: UploadedDeckListFile
+  ) {
     if (!file) {
       throw new BadRequestException("La imagen del deck list es obligatoria.");
     }
+
+    this.storeAccessPolicy.assertCanAccessStore(user, body.storeId);
 
     return this.uploadDeckListUseCase.execute({
       ...body,

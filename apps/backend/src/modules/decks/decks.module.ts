@@ -11,6 +11,7 @@ import { ResolveCardNamesUseCase } from "./application/resolve-card-names.use-ca
 import { UpdateDeckCardsUseCase } from "./application/update-deck-cards.use-case";
 import { UploadDeckListUseCase } from "./application/upload-deck-list.use-case";
 import { DecksController } from "./decks.controller";
+import { CardNameAliasCatalog } from "./domain/card-name-alias-catalog";
 import { CardNameNormalizer } from "./domain/card-name-normalizer";
 import { DeckListParser } from "./domain/deck-list-parser";
 import { LocalCardImageStorageAdapter } from "./infrastructure/local-card-image-storage.adapter";
@@ -38,6 +39,7 @@ import { OCR_PORT } from "./ports/ocr.port";
     CacheCardImagesUseCase,
     GenerateDeckImageUseCase,
     InactivateDeckUseCase,
+    CardNameAliasCatalog,
     CardNameNormalizer,
     DeckListParser,
     LocalImageStorageService,

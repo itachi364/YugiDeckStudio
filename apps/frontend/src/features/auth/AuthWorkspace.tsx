@@ -300,7 +300,11 @@ export function AuthWorkspace() {
         ) : null}
 
         {visibleMode === "store" && session ? (
-          <StoreConfigurationWorkspace accessToken={session.accessToken} defaultStoreId={session.user.storeId} />
+          <StoreConfigurationWorkspace
+            accessToken={session.accessToken}
+            defaultStoreId={session.user.storeId}
+            isRoot={session.user.isRoot}
+          />
         ) : null}
 
         {visibleMode === "catalogs" && session ? (

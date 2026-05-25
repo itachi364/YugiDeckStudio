@@ -3,10 +3,12 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import { ImageAssetCategory } from "@prisma/client";
 import { CurrentUser } from "../auth/infrastructure/current-user.decorator";
 import { JwtAuthGuard } from "../auth/infrastructure/jwt-auth.guard";
+import { RootOnlyGuard } from "../auth/infrastructure/root-only.guard";
 import { StoreScopeGuard } from "../auth/infrastructure/store-scope.guard";
 import { AuthenticatedUserPayload } from "../auth/ports/auth-token.port";
 import { ConfigureEventTypesUseCase } from "./application/configure-event-types.use-case";
 import { ConfigureTournamentTypesUseCase } from "./application/configure-tournament-types.use-case";
+import { CreateStoreUseCase } from "./application/create-store.use-case";
 import { GetStoreConfigurationUseCase } from "./application/get-store-configuration.use-case";
 import { ListStoreAssetsUseCase } from "./application/list-store-assets.use-case";
 import { ListVisibleStoresUseCase } from "./application/list-visible-stores.use-case";
@@ -15,6 +17,7 @@ import { UpdateStoreConfigurationUseCase } from "./application/update-store-conf
 import { UploadStoreAssetUseCase } from "./application/upload-store-asset.use-case";
 import { ConfigureEventTypeDto } from "./dto/configure-event-type.dto";
 import { ConfigureTournamentTypeDto } from "./dto/configure-tournament-type.dto";
+import { CreateStoreDto } from "./dto/create-store.dto";
 import { ReplaceStoreSocialLinksDto } from "./dto/replace-store-social-links.dto";
 import { UpdateStoreConfigurationDto } from "./dto/update-store-configuration.dto";
 import { UploadStoreAssetDto } from "./dto/upload-store-asset.dto";
@@ -37,7 +40,8 @@ export class StoresController {
     private readonly configureTournamentTypesUseCase: ConfigureTournamentTypesUseCase,
     private readonly replaceStoreSocialLinksUseCase: ReplaceStoreSocialLinksUseCase,
     private readonly listVisibleStoresUseCase: ListVisibleStoresUseCase,
-    private readonly listStoreAssetsUseCase: ListStoreAssetsUseCase
+    private readonly listStoreAssetsUseCase: ListStoreAssetsUseCase,
+    private readonly createStoreUseCase: CreateStoreUseCase
   ) {}
 
   @Get()
@@ -48,6 +52,12 @@ export class StoresController {
   @Get("event-types")
   listVisibleEventTypes(@CurrentUser() user: AuthenticatedUserPayload) {
     return this.configureEventTypesUseCase.listVisibleForUser(user);
+  }
+
+  @Post()
+  @UseGuards(RootOnlyGuard)
+  createStore(@Body() body: CreateStoreDto) {
+    return this.createStoreUseCase.execute(body);
   }
 
   @Get(":storeId")

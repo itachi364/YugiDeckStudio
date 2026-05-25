@@ -22,6 +22,12 @@ export type UpdateStoreConfigurationInput = {
   sourceCreditText?: string | null;
 };
 
+export type CreateStoreInput = {
+  name: string;
+  backgroundColor?: string | null;
+  sourceCreditText?: string | null;
+};
+
 export type StoreAssetCategory = "STORE_LOGO" | "EVENT_LOGO" | "SOCIAL_LOGO" | "BACKGROUND_IMAGE";
 
 export type StoreSummary = {
@@ -102,6 +108,19 @@ export const storeApi = {
       headers: {
         Authorization: `Bearer ${accessToken}`
       }
+    });
+
+    return parseJsonResponse<StoreConfiguration>(response);
+  },
+
+  async createStore(accessToken: string, input: CreateStoreInput) {
+    const response = await fetch(`${API_BASE_URL}/stores`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: JSON.stringify(input)
     });
 
     return parseJsonResponse<StoreConfiguration>(response);

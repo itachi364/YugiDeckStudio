@@ -5,6 +5,7 @@ import { storeApi, StoreAssetCategory, StoreAssetOption, StoreConfiguration, Sto
 type StoreConfigurationWorkspaceProps = {
   accessToken: string;
   defaultStoreId?: string | null;
+  isRoot: boolean;
 };
 
 type Feedback = {
@@ -38,7 +39,8 @@ const uploadTargets: Array<{
 
 export function StoreConfigurationWorkspace({
   accessToken,
-  defaultStoreId
+  defaultStoreId,
+  isRoot
 }: StoreConfigurationWorkspaceProps) {
   const [storeId, setStoreId] = useState(defaultStoreId ?? "");
   const [configuration, setConfiguration] = useState<StoreConfiguration | null>(null);
@@ -49,16 +51,9 @@ export function StoreConfigurationWorkspace({
   const [isWorking, setIsWorking] = useState(false);
 
   const normalizedStoreId = storeId.trim();
+  const isCreateMode = !normalizedStoreId;
 
-  const runStoreAction = async (action: () => Promise<void>) => {
-    if (!normalizedStoreId) {
-      setFeedback({
-        tone: "error",
-        message: "La tienda es obligatoria para configurar la tienda."
-      });
-      return;
-    }
-
+  const runAction = async (action: () => Promise<void>) => {
     setIsWorking(true);
     setFeedback(null);
 
@@ -74,20 +69,30 @@ export function StoreConfigurationWorkspace({
     }
   };
 
+  const runStoreAction = async (action: () => Promise<void>) => {
+    if (!normalizedStoreId) {
+      setFeedback({
+        tone: "error",
+        message: "La tienda es obligatoria para configurar la tienda."
+      });
+      return;
+    }
+
+    await runAction(action);
+  };
+
   const loadStores = useCallback(async () => {
     try {
       const result = await storeApi.listStores(accessToken);
       setStores(result);
-      if (!storeId && result.length === 1) {
-        setStoreId(result[0].id);
-      }
+      setStoreId((current) => current || (result.length === 1 ? result[0].id : current));
     } catch (error) {
       setFeedback({
         tone: "error",
         message: error instanceof Error ? error.message : "No fue posible cargar las tiendas."
       });
     }
-  }, [accessToken, storeId]);
+  }, [accessToken]);
 
   const loadAssetOptions = useCallback(async () => {
     if (!normalizedStoreId) {
@@ -124,12 +129,35 @@ export function StoreConfigurationWorkspace({
   const handleUpdateConfiguration = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
+    const baseInput = {
+      name: String(formData.get("name") ?? ""),
+      sourceCreditText: emptyToNull(String(formData.get("sourceCreditText") ?? "")),
+      backgroundColor: emptyToNull(String(formData.get("backgroundColor") ?? ""))
+    };
+
+    if (!normalizedStoreId) {
+      void runAction(async () => {
+        if (!isRoot) {
+          throw new Error("Solo root puede crear tiendas.");
+        }
+
+        const created = await storeApi.createStore(accessToken, baseInput);
+        setConfiguration(created);
+        setStoreId(created.id);
+        setStores((current) =>
+          [...current, { id: created.id, name: created.name }].sort((left, right) => left.name.localeCompare(right.name))
+        );
+        setFeedback({
+          tone: "success",
+          message: `Tienda ${created.name} creada.`
+        });
+      });
+      return;
+    }
 
     runStoreAction(async () => {
       const result = await storeApi.updateStoreConfiguration(accessToken, normalizedStoreId, {
-        name: String(formData.get("name") ?? ""),
-        sourceCreditText: emptyToNull(String(formData.get("sourceCreditText") ?? "")),
-        backgroundColor: emptyToNull(String(formData.get("backgroundColor") ?? "")),
+        ...baseInput,
         primaryLogoAssetId: emptyToNull(String(formData.get("primaryLogoAssetId") ?? "")),
         secondaryLogoAssetId: emptyToNull(String(formData.get("secondaryLogoAssetId") ?? "")),
         backgroundImageAssetId: emptyToNull(String(formData.get("backgroundImageAssetId") ?? ""))
@@ -170,6 +198,14 @@ export function StoreConfigurationWorkspace({
       });
     });
 
+  const startCreateStore = () => {
+    setStoreId("");
+    setConfiguration(null);
+    setStoreLogoAssets([]);
+    setBackgroundAssets([]);
+    setFeedback(null);
+  };
+
   return (
     <div className="store-configuration-layout">
       <div className="section-header">
@@ -186,33 +222,48 @@ export function StoreConfigurationWorkspace({
         </div>
       ) : null}
 
-      <section className="data-panel" aria-label="Seleccion de tienda">
-        <div className="review-actions">
-          <label>
-            Tienda
-            <select
-              name="storeId"
-              required
-              value={storeId}
-              onChange={(event) => {
-                setStoreId(event.currentTarget.value);
-                setConfiguration(null);
-              }}
-            >
-              <option value="">Selecciona una tienda</option>
-              {stores.map((store) => (
-                <option key={store.id} value={store.id}>
-                  {store.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button className="secondary-button" disabled={isWorking} type="button" onClick={handleLoadConfiguration}>
-            <Search size={18} aria-hidden="true" />
-            <span>{isWorking ? "Consultando" : "Consultar"}</span>
-          </button>
-        </div>
-      </section>
+      {stores.length > 0 ? (
+        <section className="data-panel" aria-label="Seleccion de tienda">
+          <div className="review-actions">
+            <label>
+              Tienda
+              <select
+                name="storeId"
+                required
+                value={storeId}
+                onChange={(event) => {
+                  setStoreId(event.currentTarget.value);
+                  setConfiguration(null);
+                }}
+              >
+                <option value="">Crear tienda nueva</option>
+                {stores.map((store) => (
+                  <option key={store.id} value={store.id}>
+                    {store.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button className="secondary-button" disabled={isWorking || isCreateMode} type="button" onClick={handleLoadConfiguration}>
+              <Search size={18} aria-hidden="true" />
+              <span>{isWorking ? "Consultando" : "Consultar"}</span>
+            </button>
+            {isRoot ? (
+              <button className="secondary-button" disabled={isWorking || isCreateMode} type="button" onClick={startCreateStore}>
+                Nueva tienda
+              </button>
+            ) : null}
+          </div>
+        </section>
+      ) : (
+        <section className="data-panel" aria-label="Creacion de primera tienda">
+          <p className="empty-state">
+            {isRoot
+              ? "No hay tiendas creadas. Completa el formulario y guarda para crear la primera tienda."
+              : "No tienes una tienda vinculada para configurar."}
+          </p>
+        </section>
+      )}
 
       <form className="auth-form two-column" aria-label="Configuracion base de tienda" onSubmit={handleUpdateConfiguration}>
         <label>
@@ -231,7 +282,7 @@ export function StoreConfigurationWorkspace({
           />
         </label>
         <label>
-          Texto fuente
+          Credito inferior
           <input
             defaultValue={configuration?.sourceCreditText ?? ""}
             key={`source-${configuration?.id ?? "empty"}`}
@@ -242,6 +293,7 @@ export function StoreConfigurationWorkspace({
         <label>
           Logo primario
           <select
+            disabled={isCreateMode}
             key={`primary-${configuration?.primaryLogoAssetId ?? "empty"}`}
             name="primaryLogoAssetId"
             defaultValue={configuration?.primaryLogoAssetId ?? ""}
@@ -257,6 +309,7 @@ export function StoreConfigurationWorkspace({
         <label>
           Logo secundario
           <select
+            disabled={isCreateMode}
             key={`secondary-${configuration?.secondaryLogoAssetId ?? "empty"}`}
             name="secondaryLogoAssetId"
             defaultValue={configuration?.secondaryLogoAssetId ?? ""}
@@ -272,6 +325,7 @@ export function StoreConfigurationWorkspace({
         <label>
           Fondo
           <select
+            disabled={isCreateMode}
             key={`background-${configuration?.backgroundImageAssetId ?? "empty"}`}
             name="backgroundImageAssetId"
             defaultValue={configuration?.backgroundImageAssetId ?? ""}
@@ -286,7 +340,7 @@ export function StoreConfigurationWorkspace({
         </label>
         <button className="primary-button full-width" disabled={isWorking} type="submit">
           <Save size={18} aria-hidden="true" />
-          <span>{isWorking ? "Guardando" : "Guardar configuracion"}</span>
+          <span>{isWorking ? "Guardando" : isCreateMode ? "Crear tienda" : "Guardar configuracion"}</span>
         </button>
       </form>
 
@@ -298,7 +352,7 @@ export function StoreConfigurationWorkspace({
         <div className="asset-upload-grid">
           {uploadTargets.map((target) => (
             <AssetUploadCard
-              isWorking={isWorking}
+              isWorking={isWorking || isCreateMode}
               key={target.field}
               label={target.label}
               value={configuration?.[target.field] ?? null}

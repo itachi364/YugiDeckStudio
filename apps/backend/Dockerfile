@@ -39,6 +39,9 @@ COPY --from=build /workspace/apps/backend/dist apps/backend/dist
 COPY --from=build /workspace/apps/backend/prisma apps/backend/prisma
 COPY --from=build /workspace/node_modules/.prisma node_modules/.prisma
 
+RUN mkdir -p /data/images \
+  && chown node:node /data/images
+
 WORKDIR /workspace/apps/backend
 USER node
 

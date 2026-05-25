@@ -382,7 +382,7 @@
     - Cliente frontend consume `GET /api/stores/{storeId}`.
     - Cliente frontend consume `PUT /api/stores/{storeId}`.
     - Cliente frontend consume `POST /api/stores/{storeId}/assets`.
-    - UI permite editar nombre de tienda, texto fuente y color de fondo.
+    - UI permite editar nombre de tienda, credito inferior/fuente del deck list y color de fondo.
     - UI permite asociar logo primario, logo secundario y fondo propio mediante assets.
     - UI permite subir logos `STORE_LOGO` y fondo `BACKGROUND_IMAGE` como assets permanentes.
     - Pruebas frontend cubren consulta, actualización base, logos, fondo propio y color.
@@ -505,3 +505,64 @@ No quedan decisiones funcionales abiertas para iniciar `v0.1.0`.
     - Endpoints de tiendas visibles y assets por tienda implementados.
     - UI consume listas desde base de datos y respeta el alcance del usuario autenticado.
     - Pruebas backend y frontend actualizadas.
+
+- [x] TASK-034: Permitir crear tienda desde configuracion y aclarar credito inferior.
+  - Criterios de aceptacion:
+    - AC-040.
+  - Pruebas:
+    - `root` crea una tienda desde configuracion cuando no hay tiendas existentes.
+    - La UI no muestra error de tienda obligatoria en modo creacion.
+    - Usuarios no-root siguen configurando solo su tienda vinculada.
+    - El campo `sourceCreditText` se muestra como credito inferior/fuente del deck list.
+  - Criterios de finalizacion:
+    - Endpoint root para crear tienda implementado.
+    - Configuracion de tienda soporta modo crear y modo editar.
+    - El selector de tienda no bloquea la primera creacion.
+    - Specs, contrato API y pruebas actualizadas.
+
+- [x] TASK-035: Corregir permisos del volumen local de imagenes.
+  - Criterios de aceptacion:
+    - AC-041.
+  - Pruebas:
+    - `docker compose config` valida la configuracion.
+    - Backend puede crear carpetas dentro de `/data/images` como usuario no-root.
+    - Docker Compose inicia backend despues de inicializar permisos del volumen.
+  - Criterios de finalizacion:
+    - Dockerfile conserva ejecucion no-root.
+    - Docker Compose inicializa permisos de `yugideck_image_data`.
+    - Subida de logos/fondos no falla por `EACCES`.
+    - README documenta el flujo y troubleshooting del volumen de imagenes.
+
+- [x] TASK-036: Validar alcance de tienda despues de parsear carga multipart de deck.
+  - Criterios de aceptacion:
+    - AC-042.
+  - Pruebas:
+    - Controller de carga llama `StoreAccessPolicyService` con el usuario autenticado y el `storeId` parseado del multipart.
+    - La carga multipart no depende de `StoreScopeGuard` antes de parsear el formulario.
+  - Criterios de finalizacion:
+    - `POST /api/decks/uploads` mantiene autenticacion JWT.
+    - La validacion multi-tienda se ejecuta despues de `FileInterceptor`.
+    - La carga de deck con tienda seleccionada no falla por `storeId` ausente en el guard.
+
+- [x] TASK-037: Implementar alias de cartas en espanol y variantes OCR.
+  - Criterios de aceptacion:
+    - AC-043.
+  - Pruebas:
+    - Alias espanol exacto resuelve contra nombre oficial en ingles.
+    - Variante OCR comun resuelve contra el mismo nombre oficial.
+    - Si no hay alias ni resultado externo, la carta queda no resuelta.
+  - Criterios de finalizacion:
+    - Catalogo local de alias implementado.
+    - El adaptador de YGOPRODeck consulta cache/API usando el alias oficial en ingles cuando exista.
+    - Pruebas backend cubren alias y fallback sin internet.
+
+- [x] TASK-038: Ejecutar OCR por regiones para plantilla KDE.
+  - Criterios de aceptacion:
+    - AC-044.
+  - Pruebas:
+    - El adaptador OCR llama Tesseract con regiones de monstruos, magicas, trampas, extra deck y side deck.
+    - El texto devuelto contiene encabezados logicos para que el parser conserve secciones.
+  - Criterios de finalizacion:
+    - `TesseractOcrAdapter` calcula regiones relativas al tamano de imagen.
+    - La salida OCR por regiones se ensambla con encabezados `Main Deck`, `Extra Deck` y `Side Deck`.
+    - Pruebas backend actualizadas.

@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../../infrastructure/prisma/prisma.service";
+import { CardNameAliasCatalog } from "../domain/card-name-alias-catalog";
 import { CardNameNormalizer } from "../domain/card-name-normalizer";
 import { CardNameCandidate, CardNameResolverPort } from "../ports/card-name-resolver.port";
 
@@ -29,23 +30,25 @@ export class YgoprodeckCardCatalogAdapter implements CardNameResolverPort {
   constructor(
     private readonly prisma: PrismaService,
     private readonly normalizer: CardNameNormalizer,
+    private readonly aliasCatalog: CardNameAliasCatalog,
     private readonly configService: ConfigService
   ) {}
 
   async findCandidates(originalName: string): Promise<CardNameCandidate[]> {
-    const cachedCandidates = await this.findCachedCandidates(originalName);
+    const lookupName = this.aliasCatalog.resolveOfficialName(originalName) ?? originalName;
+    const cachedCandidates = await this.findCachedCandidates(lookupName);
 
     if (cachedCandidates.length > 0) {
       return cachedCandidates;
     }
 
-    const exactCandidates = await this.fetchAndCacheCandidates("name", originalName);
+    const exactCandidates = await this.fetchAndCacheCandidates("name", lookupName);
 
     if (exactCandidates.length > 0) {
       return exactCandidates;
     }
 
-    return this.fetchAndCacheCandidates("fname", originalName);
+    return this.fetchAndCacheCandidates("fname", lookupName);
   }
 
   private async findCachedCandidates(originalName: string): Promise<CardNameCandidate[]> {

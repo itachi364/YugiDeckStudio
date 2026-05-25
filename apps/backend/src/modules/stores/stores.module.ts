@@ -3,6 +3,7 @@ import { PrismaModule } from "../../infrastructure/prisma/prisma.module";
 import { AuthModule } from "../auth/auth.module";
 import { ConfigureEventTypesUseCase } from "./application/configure-event-types.use-case";
 import { ConfigureTournamentTypesUseCase } from "./application/configure-tournament-types.use-case";
+import { CreateStoreUseCase } from "./application/create-store.use-case";
 import { GetStoreConfigurationUseCase } from "./application/get-store-configuration.use-case";
 import { ListStoreAssetsUseCase } from "./application/list-store-assets.use-case";
 import { ListVisibleStoresUseCase } from "./application/list-visible-stores.use-case";
@@ -18,6 +19,7 @@ import { StoresController } from "./stores.controller";
   controllers: [StoresController],
   providers: [
     GetStoreConfigurationUseCase,
+    CreateStoreUseCase,
     ListVisibleStoresUseCase,
     ListStoreAssetsUseCase,
     UpdateStoreConfigurationUseCase,

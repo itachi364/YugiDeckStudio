@@ -538,6 +538,9 @@ Reglas de seleccion de datos relacionados en frontend:
 - Los campos que referencian entidades persistidas deben ser listas desplegables alimentadas por API: tienda, logos/assets configurables, tipos de evento y tipos de torneo.
 - Los formularios no deben permitir digitar manualmente IDs de tienda, assets, tipos de evento o tipos de torneo.
 - Las listas desplegables de tienda y assets deben respetar el aislamiento multi-tienda: `root` puede listar todas las tiendas; usuarios no-root solo reciben su tienda y sus assets.
+- La configuracion de tienda debe soportar modo de creacion para `root`; si no existen tiendas, no debe exigir seleccion previa y debe crear la primera tienda desde el formulario.
+- En configuracion de tienda, el campo `sourceCreditText` debe mostrarse como `Credito inferior` o `Fuente del deck list`; no representa el encabezado principal de la imagen.
+- El encabezado principal de la imagen generada debe derivarse de datos del torneo/evento, ubicacion, resultado alcanzado y nombre del duelista.
 
 Permisos iniciales:
 
@@ -563,6 +566,7 @@ Implementación de aislamiento multi-tienda:
 - `DeckScopeGuard` resuelve `deck.store_id` desde PostgreSQL antes de ejecutar operaciones de deck.
 - Los endpoints de configuración de tienda usan `JwtAuthGuard` + `StoreScopeGuard`.
 - Los endpoints de decks usan `JwtAuthGuard` + `StoreScopeGuard` para carga y `JwtAuthGuard` + `DeckScopeGuard` para operaciones por `deckId`.
+- La carga `POST /api/decks/uploads` usa `multipart/form-data`; por ello debe aplicar `JwtAuthGuard` y validar `storeId` con `StoreAccessPolicyService` dentro del controller despues de que `FileInterceptor` parsee el formulario.
 - Usuarios con `must_change_password = true` no pueden operar recursos de tienda.
 
 ## 8.2 Diseño de ciclo de vida del deck
@@ -630,16 +634,29 @@ Reglas:
 
 El OCR se aísla detrás de `OcrPort`.
 
+Para la plantilla KDE usada en `v0.1.0`, el adaptador OCR debe reconocer regiones separadas antes de entregar texto al parser:
+
+- `MAIN` monstruos.
+- `MAIN` magicas.
+- `MAIN` trampas.
+- `EXTRA` deck.
+- `SIDE` deck.
+
+Cada region se calcula con porcentajes relativos al tamano real de la imagen para soportar imagenes escaladas de la misma plantilla. El texto devuelto por OCR debe incluir encabezados logicos (`Main Deck`, `Extra Deck`, `Side Deck`) para que el parser conserve la seccion correcta.
+
 La resolución de nombres debe:
 
 - Conservar el texto original del OCR.
 - Normalizar espacios y errores comunes de OCR.
+- Intentar resolver alias locales de nombres en espanol y variantes OCR hacia nombres oficiales en ingles.
 - Intentar coincidencia exacta contra nombres de cartas cacheados.
 - Intentar consulta exacta a YGOPRODeck por `name` cuando exista un nombre en inglés confiable.
 - Intentar consulta difusa cuando la resolución exacta falle.
 - Marcar cartas no resueltas para corrección manual.
 
 El sistema no debe reemplazar silenciosamente cartas ambiguas.
+
+El catalogo inicial de alias se mantiene como logica local de dominio para `v0.1.0` y cubre los nombres espanoles y errores OCR observados en pruebas del deck White Forest/Azamina. Si un alias apunta a un nombre oficial en ingles, el adaptador de YGOPRODeck debe usar ese nombre oficial para cache local, busqueda exacta y busqueda difusa.
 
 ## 10. Diseño de integración con YGOPRODeck
 
@@ -677,6 +694,7 @@ Servicios locales propuestos:
 - `frontend`.
 - `backend`.
 - `postgres`.
+- `image-permissions` para inicializar permisos del volumen local de imagenes antes de iniciar servicios que escriben archivos.
 - `image-storage` o módulo equivalente de backend para servir imágenes desde volumen local.
 - `image-cleaner` o job programado equivalente para depuración semanal.
 
@@ -684,6 +702,8 @@ Volúmenes propuestos:
 
 - `yugideck_postgres_data`.
 - `yugideck_image_data`.
+
+El backend e `image-cleaner` deben ejecutarse como usuario no-root. El volumen `yugideck_image_data` debe quedar con propiedad compatible con el usuario runtime de Node para permitir escritura en carpetas como `uploaded-decklists`, `generated-deck-images`, `card-images`, `store-logos`, `event-logos`, `social-logos` y `background-images`.
 
 No se debe diseñar despliegue a internet en esta fase.
 

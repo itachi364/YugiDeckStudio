@@ -115,6 +115,7 @@ Servicios locales:
 - Backend: `http://127.0.0.1:3000`
 - Image storage: `http://127.0.0.1:8081`
 - PostgreSQL: `127.0.0.1:5432`
+- Image permissions: servicio one-shot que prepara permisos del volumen `yugideck_image_data`.
 
 ## Base de Datos
 
@@ -174,6 +175,8 @@ El volumen `yugideck_image_data` guarda:
 - Imagenes de cartas: permanentes.
 - Logos de tienda, eventos y redes: permanentes.
 - Fondos configurables: permanentes.
+
+El backend e `image-cleaner` corren como usuario no-root. Docker Compose ejecuta el servicio `image-permissions` antes de iniciar esos servicios para que `/data/images` pueda escribirse sin ejecutar la aplicacion como root.
 
 `image-cleaner` ejecuta depuracion cada `604800` segundos por defecto. Solo elimina assets temporales con retencion vencida.
 
@@ -290,6 +293,12 @@ Falla generacion por cache incompleta:
 
 - Ejecuta primero `Cachear cartas` desde la pantalla `Imagen`.
 - Si no hay internet y faltan cartas o imagenes, la generacion se bloquea por diseno.
+
+Error `EACCES: permission denied, mkdir '/data/images/...'` al subir imagenes:
+
+- Ejecuta `docker compose up --build -d --force-recreate image-permissions backend image-cleaner` para recrear el servicio `image-permissions`.
+- Verifica permisos con `docker compose exec backend ls -ld /data/images`.
+- El propietario esperado dentro del contenedor es `node node` o UID/GID `1000 1000`.
 
 ## Licencia
 

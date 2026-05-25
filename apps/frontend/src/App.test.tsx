@@ -1126,8 +1126,8 @@ describe("App", () => {
     await user.type(screen.getByLabelText(/nombre de tienda/i), "Yugi Local Store");
     await user.clear(screen.getByLabelText(/color de fondo/i));
     await user.type(screen.getByLabelText(/color de fondo/i), "#223344");
-    await user.clear(screen.getByLabelText(/texto fuente/i));
-    await user.type(screen.getByLabelText(/texto fuente/i), "YugiLocal");
+    await user.clear(screen.getByLabelText(/credito inferior/i));
+    await user.type(screen.getByLabelText(/credito inferior/i), "YugiLocal");
     await user.click(screen.getByRole("button", { name: /guardar configuracion/i }));
 
     await waitFor(() => {
@@ -1152,6 +1152,65 @@ describe("App", () => {
       })
     );
     expect(await screen.findByText(/configuracion de tienda actualizada/i)).toBeInTheDocument();
+  });
+
+  it("lets root create the first store from configuration without selecting an existing store", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        accessToken: "jwt-token",
+        expiresIn: "1d",
+        user: {
+          id: "root-id",
+          username: "root",
+          displayName: "Root",
+          storeId: null,
+          isRoot: true,
+          mustChangePassword: false,
+          roles: ["root"]
+        }
+      })
+    );
+    await queueVisibleEventTypes();
+    await queueStoreList([]);
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        id: "store-created-id",
+        name: "Virtual Really World",
+        primaryLogoAssetId: null,
+        secondaryLogoAssetId: null,
+        backgroundImageAssetId: null,
+        backgroundColor: "#10131a",
+        sourceCreditText: null
+      })
+    );
+
+    renderApp();
+
+    await user.type(screen.getByLabelText(/usuario/i), "root");
+    await user.type(screen.getByLabelText(/contrasena/i), "ChangedPassword123!");
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
+    await user.click(await screen.findByRole("button", { name: /tienda/i }));
+
+    expect(await screen.findByText(/no hay tiendas creadas/i)).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/nombre de tienda/i), "Virtual Really World");
+    await user.click(screen.getByRole("button", { name: /crear tienda/i }));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/stores",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer jwt-token"
+        }),
+        body: JSON.stringify({
+          name: "Virtual Really World",
+          sourceCreditText: null,
+          backgroundColor: "#10131a"
+        })
+      })
+    );
+    expect(await screen.findByText(/tienda virtual really world creada/i)).toBeInTheDocument();
   });
 
   it("uploads store logos and a custom background as permanent assets", async () => {
