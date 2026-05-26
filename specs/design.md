@@ -1,10 +1,10 @@
-# YugiDeckStudio v0.1.0 - Diseño
+﻿# YugiDeckStudio v0.1.0 - Diseño
 
 ## 1. Visión general
 
 YugiDeckStudio se implementará como una aplicación full-stack local basada en Docker Compose.
 
-El sistema recibe una imagen subida de deck list de Yu-Gi-Oh!, extrae datos del deck mediante OCR, resuelve nombres de cartas en inglés, obtiene información de cartas desde YGOPRODeck, cachea datos e imágenes, persiste el flujo completo del deck en PostgreSQL local y genera una imagen compartible con branding.
+El sistema recibe una imagen subida de deck list de Yu-Gi-Oh! como evidencia, exige un link publico de Yu-Gi-Oh! Neuron para importar la composicion estructurada del deck, permite revisar la composicion, obtiene informacion de cartas desde YGOPRODeck usando los nombres revisados, cachea datos e imagenes, persiste el flujo completo del deck en PostgreSQL local y genera una imagen compartible con branding.
 
 La versión `v0.1.0` no contempla despliegue a internet. La aplicación debe poder ejecutarse completamente en una máquina local, usando internet solo para consultar YGOPRODeck cuando no exista caché local.
 
@@ -16,7 +16,6 @@ Arquitectura seleccionada:
 - Frontend: arquitectura modular basada en features.
 - Stack backend: NestJS + TypeScript.
 - Stack frontend: React + Vite + TypeScript.
-- OCR: Tesseract OCR.
 - Renderizado de imágenes: node-canvas.
 - ORM y migraciones: Prisma.
 - Pruebas backend: Jest.
@@ -36,7 +35,7 @@ El backend debe separar:
 - Adaptadores de infraestructura.
 - Controladores HTTP/API.
 
-Sistemas externos como proveedores OCR, YGOPRODeck, almacenamiento de archivos y generación de imágenes deben accederse mediante puertos y adaptadores.
+Sistemas externos como Yu-Gi-Oh! Neuron/Konami, YGOPRODeck, almacenamiento de archivos y generacion de imagenes deben accederse mediante puertos y adaptadores.
 
 ## 3. Módulos backend propuestos
 
@@ -64,8 +63,8 @@ Sistemas externos como proveedores OCR, YGOPRODeck, almacenamiento de archivos y
 ### Casos de uso de aplicación
 
 - UploadDeckListImageUseCase.
-- ExtractDeckListFromImageUseCase.
-- ResolveCardNamesUseCase.
+- ImportDeckListFromNeuronUseCase.
+- ListDecksUseCase.
 - FetchCardDataUseCase.
 - CacheCardImageUseCase.
 - GenerateDeckImageUseCase.
@@ -86,7 +85,7 @@ Sistemas externos como proveedores OCR, YGOPRODeck, almacenamiento de archivos y
 
 ### Puertos
 
-- OcrPort.
+- NeuronDeckImportPort.
 - CardCatalogPort.
 - CardImageStoragePort.
 - DeckImageRendererPort.
@@ -121,14 +120,17 @@ Sistemas externos como proveedores OCR, YGOPRODeck, almacenamiento de archivos y
 - LocalJwtAuthTokenAdapter.
 - PermissionAuthorizationPolicyAdapter.
 - LocalDockerVolumeFileStorageAdapter.
-- TesseractOcrAdapter.
+- KonamiNeuronDeckImportAdapter.
 - NodeCanvasDeckImageRendererAdapter.
 - LocalSchedulerAdapter.
 
 ## 4. Módulos frontend propuestos
 
-- Página de carga de deck.
-- Página de revisión de extracción.
+- Página de carga de deck con listado de decks visibles y acciones directas de revision/generacion.
+- Pagina interna de revision de deck, accesible desde la carga o desde el listado.
+- Modal desktop de revision de deck, abierto desde `Decks` sin cambiar de modulo.
+- Modal desktop de generacion de imagen, cacheo, previsualizacion y descarga.
+- Vista mobile completa para revision y generacion cuando el viewport no permite modales ergonomicos.
 - Página de configuración de tienda.
 - Página de configuración de tipos de eventos.
 - Página de configuración de tipos de torneos.
@@ -137,26 +139,61 @@ Sistemas externos como proveedores OCR, YGOPRODeck, almacenamiento de archivos y
 - Página de registro.
 - Página de configuración de usuarios.
 - Página de configuración de roles y permisos.
-- Página de previsualización de imagen generada.
+- Panel de previsualizacion y descarga de imagen generada dentro de la pantalla `Decks`.
+- Persistencia de sesion autenticada en almacenamiento local del navegador con `lastActivityAt` y expiracion por inactividad de 20 minutos.
 - Componentes UI compartidos.
 - Módulo cliente de API.
 
 ## 5. Flujo principal
 
-1. El operador sube una imagen de deck list con metadatos obligatorios.
-2. El backend valida metadatos y restricciones del archivo.
-3. El backend almacena la imagen en el volumen local de imágenes.
-4. El backend persiste metadatos de la carga en PostgreSQL.
-5. El OCR extrae texto bruto y secciones del deck.
-6. El backend parsea cantidades y nombres de cartas.
-7. El backend resuelve nombres a nombres de cartas en inglés.
-8. El operador revisa entradas no resueltas o de baja confianza.
-9. El backend consulta YGOPRODeck para las cartas resueltas que no existan en caché.
-10. El backend cachea metadatos e imágenes de cartas.
-11. El backend persiste la composición final del deck.
+1. El operador sube una imagen de deck list como evidencia, metadatos obligatorios y link Neuron.
+2. El backend valida metadatos, restricciones del archivo y dominio del link Neuron.
+3. El backend almacena la imagen en el volumen local de imagenes.
+4. El backend consulta el link Neuron y sigue redirecciones validas hacia Konami.
+5. El backend parsea secciones, cantidades y nombres oficiales desde HTML estructurado.
+6. El backend persiste metadatos, link Neuron, imagen de evidencia y cartas importadas en PostgreSQL.
+7. El operador revisa y corrige la lista importada cuando haga falta.
+8. El operador confirma el deck cuando la composicion es valida.
+9. El backend consulta YGOPRODeck con los nombres revisados cuando se cachean imagenes.
+10. El backend cachea metadatos e imagenes de cartas.
+11. El backend persiste la composicion final del deck.
 12. El backend renderiza la imagen del deck con branding.
-13. El backend almacena la imagen generada en el volumen local de imágenes.
-14. El frontend muestra previsualización y acción de descarga local.
+13. El backend almacena la imagen generada en el volumen local de imagenes.
+14. El frontend muestra previsualizacion y accion de descarga local dentro de `Decks`.
+
+## 5.1 Flujo de experiencia responsive en Decks
+
+La pantalla `Decks` concentra las acciones operativas del deck para evitar navegar entre menus separados.
+
+Reglas de UI:
+
+- En desktop, `Revisar` abre `DeckReviewWorkspace` dentro de un dialog modal con scroll interno.
+- En desktop, `Generar imagen` abre el flujo de cacheo, generacion, previsualizacion y descarga dentro de un dialog modal.
+- En mobile, `Revisar` y `Generar imagen` reemplazan temporalmente el contenido de `Decks` por una vista completa con accion `Volver`.
+- Las filas de decks deben adaptarse a una columna en mobile y usar todo el ancho disponible en desktop.
+- El menu lateral no debe incluir accesos separados de revision ni de imagen.
+
+## 5.2 Diseno de sesion local e inactividad
+
+El login sigue usando el token JWT local emitido por backend. Para soportar refresco de navegador, el frontend conserva la sesion autenticada en `localStorage` bajo una clave local de la aplicacion.
+
+Forma logica almacenada:
+
+```json
+{
+  "accessToken": "jwt-local",
+  "user": {},
+  "lastActivityAt": 1770000000000
+}
+```
+
+Reglas:
+
+- Al iniciar la aplicacion, el frontend restaura la sesion si `Date.now() - lastActivityAt` es menor a 20 minutos.
+- Actividad local del usuario, como click, teclado, scroll, touch o foco de ventana, actualiza `lastActivityAt`.
+- Un intervalo local verifica la inactividad y, si llega a 20 minutos, elimina la sesion y vuelve al login.
+- El evento `storage` sincroniza logout entre pestanas del mismo navegador.
+- El timeout de inactividad es una regla de frontend local para seguridad de uso; no reemplaza la expiracion criptografica del JWT configurada en backend.
 
 ## 6. Propuesta de modelo de datos
 
@@ -288,7 +325,7 @@ Las entidades con alcance de tienda incluyen:
 - deck_name.
 - result_label.
 - uploaded_image_asset_id.
-- raw_ocr_text.
+- neuron_deck_url.
 - extraction_status.
 - review_status.
 - status.
@@ -371,9 +408,9 @@ Políticas de retención propuestas:
 Los contratos finales de API estan documentados en `specs/api-contract.md`. Endpoints principales de `v0.1.0`:
 
 - `POST /api/decks/uploads`
-- `POST /api/decks/{deckId}/extract`
+- `GET /api/decks`
+- `GET /api/decks/{deckId}/cards`
 - `PUT /api/decks/{deckId}/cards`
-- `POST /api/decks/{deckId}/resolve-card-names`
 - `POST /api/decks/{deckId}/cache-card-images`
 - `POST /api/decks/{deckId}/generate-image`
 - `POST /api/decks/{deckId}/inactivate`
@@ -442,14 +479,16 @@ La plantilla por defecto debe soportar:
 
 El renderer debe recibir datos estructurados del deck y configuración de branding. No debe consultar APIs externas directamente.
 
+La grilla del Main Deck debe adaptar columnas y tamaño de carta para renderizar decks legales completos, incluyendo Main Deck de 40 a 60 cartas, sin truncar cartas expandidas por cantidad. Extra Deck y Side Deck deben renderizar hasta 15 cartas cada uno.
+
 La versión `v0.1.0` tendrá una sola plantilla base parametrizable.
 
 La tienda puede configurar fondo propio o color de fondo. Si existe fondo propio activo, el renderer debe usarlo con prioridad. Si no existe fondo propio activo, debe usar el color de fondo configurado por la tienda.
 
 El caso de uso de generación debe validar antes del renderizado:
 
-- revisión OCR confirmada;
-- todas las entradas del deck resueltas contra `Card`;
+- revision de importacion Neuron confirmada;
+- todas las entradas del deck vinculadas a metadatos `Card`;
 - todas las cartas con `image_asset_id` activo;
 - rutas locales seguras resueltas desde el volumen configurado.
 
@@ -529,6 +568,7 @@ Reglas de navegación frontend:
 - Los usuarios no-root no deben ver la opción `Registro`, incluso si el backend rechazaría la operación por permisos.
 - Después de iniciar sesión, la vista por defecto debe ser el index de eventos configurados.
 - El index de eventos debe listar eventos filtrados por la tienda del usuario no-root; `root` puede ver eventos de todas las tiendas.
+- La navegación autenticada no debe exponer un menu separado de `Imagen`; la generacion y previsualizacion viven dentro de `Decks`.
 - `operator`, `store_admin` y `root` pueden crear y modificar eventos dentro de su alcance.
 - La eliminación de eventos debe ser soft delete mediante inactivación (`isActive = false`) y solo debe estar disponible para `store_admin` y `root`.
 
@@ -546,7 +586,7 @@ Permisos iniciales:
 
 - `root`: todos los permisos globales.
 - `store_admin`: configuración de tienda, eventos, torneos, redes, logos, usuarios operadores, decks e imágenes de su tienda.
-- `operator`: carga de deck lists, revisión de extracción, corrección previa a generación, generación y descarga de imágenes de su tienda.
+- `operator`: carga de deck lists, revision de importacion, corrección previa a generación, generación y descarga de imágenes de su tienda.
 
 Implementación de roles y permisos:
 
@@ -582,9 +622,15 @@ Estados propuestos de deck:
 Reglas:
 
 - El deck list subido no se puede reemplazar sobre el mismo deck.
-- La revisión OCR es obligatoria antes de generar imagen.
-- Antes de generar imagen se permite corregir cartas extraídas.
+- La revision de importacion Neuron es obligatoria antes de generar imagen.
+- Antes de generar imagen se permite corregir cartas importadas.
 - La corrección reemplaza la lista completa de cartas del deck mientras la revisión esté pendiente.
+- En frontend, cualquier edicion o eliminacion local de cartas importadas debe marcar la revision como pendiente de guardado y bloquear `Confirmar deck` hasta persistir las correcciones.
+- En frontend, la eliminacion de una carta extraida se aplica localmente y se persiste mediante el mismo contrato `PUT /api/decks/{deckId}/cards`, que reemplaza la lista completa.
+- En frontend, `Confirmar deck` solo debe habilitarse cuando no existan cambios locales sin guardar y la composicion sea valida.
+- La pantalla de revision debe mostrar seccion, cantidad, nombre y orden para validacion visual del operador.
+- La pantalla de revision debe mostrar conteos por seccion y permitir agregar filas manuales cuando la importacion Neuron requiere ajuste manual.
+- La confirmacion de revision y la generacion de imagen deben validar composicion de deck: `Main Deck` entre 40 y 60 cartas, `Extra Deck` maximo 15 cartas y `Side Deck` maximo 15 cartas.
 - Confirmar revisión cambia `review_status` a `CONFIRMED` y `status` a `REVIEWED`.
 - Después de generar imagen, el operador no puede eliminar ni inactivar el deck.
 - Después de generar imagen, solo `store_admin` o `root` pueden inactivar el deck.
@@ -616,6 +662,7 @@ Para `v0.1.0`, `DeckPersistenceRepository` actúa como puerto de persistencia pa
 Reglas:
 
 - `DeckReviewPolicyService` debe validar la revisión mediante el puerto de repositorio.
+- `DeckCompositionPolicyService` debe validar conteos antes de confirmar revision o generar imagen.
 - `InactivateDeckUseCase` debe inactivar decks mediante el puerto de repositorio.
 - La eliminación física de archivos permanece separada en el adaptador de almacenamiento local.
 - Las pruebas deben cubrir el contrato del repositorio y el desacoplamiento de los casos de uso.
@@ -630,34 +677,42 @@ Reglas:
 - Si falta alguna carta o imagen y no hay conexión a YGOPRODeck, la generación debe bloquearse.
 - El error debe informar qué cartas o imágenes faltan.
 
-## 9. Diseño de OCR y resolución de nombres
+## 9. Diseno de importacion Neuron y revision de deck
 
-El OCR se aísla detrás de `OcrPort`.
+La importacion de Yu-Gi-Oh! Neuron se aisla detras de `NeuronDeckImportPort`.
 
-Para la plantilla KDE usada en `v0.1.0`, el adaptador OCR debe reconocer regiones separadas antes de entregar texto al parser:
+El adaptador `KonamiNeuronDeckImportAdapter` debe:
 
-- `MAIN` monstruos.
-- `MAIN` magicas.
-- `MAIN` trampas.
-- `EXTRA` deck.
-- `SIDE` deck.
+- aceptar unicamente links con hostname `neuron.konami.net` o `www.db.yugioh-card.com`;
+- seguir redirecciones HTTP validas desde Neuron hacia la base de datos publica de Konami;
+- rechazar links con otros protocolos u hostnames para reducir riesgo SSRF;
+- leer HTML con codificacion UTF-8;
+- extraer la lista estructurada desde tablas `monster_list`, `spell_list`, `trap_list`, `extra_list` y `side_list` cuando existan;
+- normalizar entidades HTML, espacios y saltos de linea;
+- mapear monstruos, magicas y trampas a `DeckSection.MAIN`;
+- mapear Extra Deck a `DeckSection.EXTRA`;
+- mapear Side Deck a `DeckSection.SIDE`;
+- rechazar respuestas sin cartas parseables.
 
-Cada region se calcula con porcentajes relativos al tamano real de la imagen para soportar imagenes escaladas de la misma plantilla. El texto devuelto por OCR debe incluir encabezados logicos (`Main Deck`, `Extra Deck`, `Side Deck`) para que el parser conserve la seccion correcta.
+La carga de deck debe usar el link Neuron para importar cartas en el mismo flujo que persiste la imagen de evidencia y los metadatos. Si la importacion falla, el backend no debe crear decks incompletos.
 
-La resolución de nombres debe:
+El OCR y Tesseract no forman parte del diseno vigente. La imagen subida no se usa para leer cartas; se conserva como soporte visual y auditoria local.
 
-- Conservar el texto original del OCR.
-- Normalizar espacios y errores comunes de OCR.
-- Intentar resolver alias locales de nombres en espanol y variantes OCR hacia nombres oficiales en ingles.
-- Intentar coincidencia exacta contra nombres de cartas cacheados.
-- Intentar consulta exacta a YGOPRODeck por `name` cuando exista un nombre en inglés confiable.
-- Intentar consulta difusa cuando la resolución exacta falle.
-- Marcar cartas no resueltas para corrección manual.
+La revision de deck debe:
 
-El sistema no debe reemplazar silenciosamente cartas ambiguas.
+- Conservar el nombre importado desde Neuron.
+- Permitir editar seccion, cantidad, nombre y orden.
+- Permitir eliminar cartas que no pertenezcan al deck.
+- Permitir agregar cartas faltantes antes de guardar.
+- Confirmar el deck sin exponer una accion separada de resolucion de nombres.
 
-El catalogo inicial de alias se mantiene como logica local de dominio para `v0.1.0` y cubre los nombres espanoles y errores OCR observados en pruebas del deck White Forest/Azamina. Si un alias apunta a un nombre oficial en ingles, el adaptador de YGOPRODeck debe usar ese nombre oficial para cache local, busqueda exacta y busqueda difusa.
+La ventana de carga de decks debe listar los decks visibles para el usuario autenticado. `root` ve decks de todas las tiendas y los usuarios no-root solo ven decks de su tienda. Cada fila debe permitir abrir la revision del deck seleccionado y generar la imagen del deck confirmado sin digitar manualmente el Deck ID.
 
+La accion `Generar imagen` en `Decks` debe ejecutar primero el cacheo de imagenes de cartas. Si no hay faltantes, debe invocar la generacion final, mostrar la previsualizacion y ofrecer descarga PNG en la misma pantalla. Si hay faltantes, debe mostrar la lista de dependencias faltantes y detener la generacion final.
+
+El frontend debe usar layouts responsivos: en escritorio el workspace principal ocupa el ancho disponible; en pantallas estrechas, sidebar, formularios, tablas, filas de deck, revision y previsualizacion deben adaptarse a una sola columna sin overflow horizontal.
+
+El cacheo de imagenes usa los nombres revisados para consultar YGOPRODeck internamente. Si YGOPRODeck no encuentra una carta o devuelve multiples coincidencias, el cacheo debe reportar la dependencia faltante para que el usuario corrija el nombre en la revision del deck.
 ## 10. Diseño de integración con YGOPRODeck
 
 El acceso a YGOPRODeck se aísla detrás de `CardCatalogPort`.
@@ -674,7 +729,7 @@ El adaptador debe:
 
 ## 10.1 Diseño de caché permanente de imágenes de cartas
 
-`CacheCardImageUseCase` debe descargar las imágenes fuente de cartas resueltas usando `CardImageStoragePort`.
+`CacheCardImageUseCase` debe descargar las imágenes fuente de cartas revisadas usando `CardImageStoragePort`.
 
 Reglas:
 
@@ -735,6 +790,8 @@ La duración de retención definida para `v0.1.0` es de 7 días.
 - Almacenar archivos fuera de rutas ejecutables.
 - Evitar registrar en logs el contenido de imágenes subidas o datos sensibles.
 - Validar todos los cuerpos de solicitud.
+- Cerrar la sesion local despues de 20 minutos de inactividad y limpiar el token almacenado en navegador.
+- Sincronizar cierre de sesion entre pestanas mediante eventos de almacenamiento del navegador.
 - No hardcodear credenciales ni secretos de base de datos.
 - Usar `.env.example`, no `.env`.
 - No exponer servicios fuera de localhost o la red local sin una decisión técnica posterior.
@@ -760,21 +817,21 @@ sequenceDiagram
     actor Operador
     participant Frontend
     participant Backend
-    participant OCR
+    participant Neuron as Yu-Gi-Oh! Neuron / Konami DB
     participant YGO as YGOPRODeck
     participant DB as PostgreSQL
     participant Storage as Volumen local de imágenes
     participant Renderer
 
-    Operador->>Frontend: Sube imagen de deck list y metadatos
+    Operador->>Frontend: Sube imagen de deck list, link Neuron y metadatos
     Frontend->>Backend: POST /api/decks/uploads
     Backend->>Storage: Almacena imagen de deck list
     Backend->>DB: Persiste metadatos de carga del deck
-    Backend->>OCR: Extrae texto desde la imagen
-    OCR-->>Backend: Texto bruto del deck
-    Backend->>Backend: Parsea secciones y cantidades
-    Backend->>Backend: Resuelve nombres a inglés
-    Backend->>YGO: Obtiene información de cartas faltantes
+    Backend->>Neuron: Consulta link Neuron y sigue redirecciones
+    Neuron-->>Backend: HTML estructurado del deck
+    Backend->>Backend: Parsea secciones, cantidades y nombres
+    Operador->>Frontend: Revisa composicion y confirma deck
+    Backend->>YGO: Obtiene información usando nombres revisados
     YGO-->>Backend: Metadatos y URLs de imágenes
     Backend->>Storage: Cachea imágenes de cartas permanentes
     Backend->>DB: Persiste cartas del deck y caché

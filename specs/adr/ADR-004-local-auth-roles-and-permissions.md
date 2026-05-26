@@ -1,4 +1,4 @@
-# ADR-004: Autenticación local, root, roles y permisos
+﻿# ADR-004: Autenticación local, root, roles y permisos
 
 ## Estado
 
@@ -49,7 +49,7 @@ Los usuarios no-root estarán vinculados a una tienda y solo podrán ver u opera
 
 - `root`: todos los permisos sobre todas las tiendas.
 - `store_admin`: administrar configuración, eventos, torneos, redes, logos, usuarios operadores, decks e imágenes de su tienda.
-- `operator`: subir deck lists, revisar extracción, corregir cartas antes de generación, generar imágenes y descargar imágenes de su tienda.
+- `operator`: subir deck lists, revisar importacion, corregir cartas antes de generación, generar imágenes y descargar imágenes de su tienda.
 
 ## Reglas de creación de usuarios
 

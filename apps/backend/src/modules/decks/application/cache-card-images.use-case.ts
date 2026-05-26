@@ -5,8 +5,14 @@ import {
   CARD_IMAGE_STORAGE_PORT,
   CardImageStoragePort
 } from "../ports/card-image-storage.port";
+import {
+  CARD_NAME_RESOLVER_PORT,
+  CardNameResolverPort
+} from "../ports/card-name-resolver.port";
 
-interface DeckCardWithResolvedCard {
+interface DeckCardForImageCache {
+  id: string;
+  originalName: string;
   card: {
     id: string;
     ygoprodeckId: number;
@@ -45,7 +51,8 @@ export interface CacheCardImagesResult {
 export class CacheCardImagesUseCase {
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(CARD_IMAGE_STORAGE_PORT) private readonly cardImageStorage: CardImageStoragePort
+    @Inject(CARD_IMAGE_STORAGE_PORT) private readonly cardImageStorage: CardImageStoragePort,
+    @Inject(CARD_NAME_RESOLVER_PORT) private readonly cardNameResolver: CardNameResolverPort
   ) {}
 
   async execute(deckId: string): Promise<CacheCardImagesResult> {
@@ -56,12 +63,9 @@ export class CacheCardImagesUseCase {
       select: {
         id: true,
         deckCards: {
-          where: {
-            cardId: {
-              not: null
-            }
-          },
           select: {
+            id: true,
+            originalName: true,
             card: {
               select: {
                 id: true,
@@ -87,10 +91,8 @@ export class CacheCardImagesUseCase {
       throw new NotFoundException("El deck indicado no existe.");
     }
 
-    const uniqueCards = this.uniqueResolvedCards(deck.deckCards);
-
-    if (uniqueCards.length === 0) {
-      throw new BadRequestException("El deck no tiene cartas resueltas para cachear imagenes.");
+    if (deck.deckCards.length === 0) {
+      throw new BadRequestException("El deck no tiene cartas revisadas para cachear imagenes.");
     }
 
     const result: CacheCardImagesResult = {
@@ -99,6 +101,8 @@ export class CacheCardImagesUseCase {
       alreadyCached: [],
       missing: []
     };
+
+    const uniqueCards = await this.findOrLinkCards(deck.deckCards, result.missing);
 
     for (const card of uniqueCards) {
       if (card.imageAssetId && card.imageAsset && !card.imageAsset.deletedAt) {
@@ -182,12 +186,63 @@ export class CacheCardImagesUseCase {
     return result;
   }
 
-  private uniqueResolvedCards(deckCards: DeckCardWithResolvedCard[]): NonNullable<DeckCardWithResolvedCard["card"]>[] {
-    const cardsById = new Map<string, NonNullable<DeckCardWithResolvedCard["card"]>>();
+  private async findOrLinkCards(
+    deckCards: DeckCardForImageCache[],
+    missing: MissingCardImageResultItem[]
+  ): Promise<NonNullable<DeckCardForImageCache["card"]>[]> {
+    const cardsById = new Map<string, NonNullable<DeckCardForImageCache["card"]>>();
 
     for (const deckCard of deckCards) {
       if (deckCard.card) {
         cardsById.set(deckCard.card.id, deckCard.card);
+        continue;
+      }
+
+      const candidates = await this.cardNameResolver.findCandidates(deckCard.originalName);
+
+      if (candidates.length !== 1) {
+        missing.push({
+          cardId: deckCard.id,
+          officialName: deckCard.originalName,
+          reason:
+            candidates.length === 0
+              ? "No se encontro la carta en YGOPRODeck usando el nombre revisado."
+              : "El nombre revisado devuelve multiples coincidencias en YGOPRODeck."
+        });
+        continue;
+      }
+
+      await this.prisma.deckCard.update({
+        where: {
+          id: deckCard.id
+        },
+        data: {
+          cardId: candidates[0].id
+        }
+      });
+
+      const linkedCard = await this.prisma.card.findUnique({
+        where: {
+          id: candidates[0].id
+        },
+        select: {
+          id: true,
+          ygoprodeckId: true,
+          officialName: true,
+          imageAssetId: true,
+          imageUrlSource: true,
+          imageAsset: {
+            select: {
+              id: true,
+              storagePath: true,
+              deletedAt: true
+            }
+          }
+        }
+      });
+
+      if (linkedCard) {
+        cardsById.set(linkedCard.id, linkedCard);
       }
     }
 

@@ -6,22 +6,32 @@ describe("CacheCardImagesUseCase", () => {
   const findDeck = jest.fn();
   const upsertImageAsset = jest.fn();
   const updateCard = jest.fn();
+  const updateDeckCard = jest.fn();
+  const findCard = jest.fn();
   const storeCardImage = jest.fn();
+  const findCandidates = jest.fn();
 
   const useCase = new CacheCardImagesUseCase(
     {
       deck: {
         findUnique: findDeck
       },
+      deckCard: {
+        update: updateDeckCard
+      },
       managedImageAsset: {
         upsert: upsertImageAsset
       },
       card: {
+        findUnique: findCard,
         update: updateCard
       }
     } as never,
     {
       storeCardImage
+    },
+    {
+      findCandidates
     }
   );
 
@@ -31,6 +41,8 @@ describe("CacheCardImagesUseCase", () => {
       id: "deck-id",
       deckCards: [
         {
+          id: "deck-card-1",
+          originalName: "Blue-Eyes White Dragon",
           card: {
             id: "card-1",
             ygoprodeckId: 89631139,
@@ -111,6 +123,8 @@ describe("CacheCardImagesUseCase", () => {
       id: "deck-id",
       deckCards: [
         {
+          id: "deck-card-1",
+          originalName: "Blue-Eyes White Dragon",
           card: {
             id: "card-1",
             ygoprodeckId: 89631139,
@@ -145,6 +159,8 @@ describe("CacheCardImagesUseCase", () => {
       id: "deck-id",
       deckCards: [
         {
+          id: "deck-card-1",
+          originalName: "Blue-Eyes White Dragon",
           card: {
             id: "card-1",
             ygoprodeckId: 89631139,
@@ -169,13 +185,53 @@ describe("CacheCardImagesUseCase", () => {
     ]);
   });
 
+  it("uses reviewed Neuron names to link cards before caching images", async () => {
+    findDeck.mockResolvedValue({
+      id: "deck-id",
+      deckCards: [
+        {
+          id: "deck-card-1",
+          originalName: "Blue-Eyes White Dragon",
+          card: null
+        }
+      ]
+    });
+    findCandidates.mockResolvedValue([
+      {
+        id: "card-1",
+        officialName: "Blue-Eyes White Dragon"
+      }
+    ]);
+    findCard.mockResolvedValue({
+      id: "card-1",
+      ygoprodeckId: 89631139,
+      officialName: "Blue-Eyes White Dragon",
+      imageAssetId: null,
+      imageUrlSource: "https://images.ygoprodeck.com/images/cards/89631139.jpg",
+      imageAsset: null
+    });
+
+    await useCase.execute("deck-id");
+
+    expect(findCandidates).toHaveBeenCalledWith("Blue-Eyes White Dragon");
+    expect(updateDeckCard).toHaveBeenCalledWith({
+      where: {
+        id: "deck-card-1"
+      },
+      data: {
+        cardId: "card-1"
+      }
+    });
+    expect(storeCardImage).toHaveBeenCalled();
+  });
+
   it("rejects missing decks", async () => {
     findDeck.mockResolvedValue(null);
 
     await expect(useCase.execute("missing-deck")).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it("rejects decks without resolved cards", async () => {
+  it("rejects decks without reviewed cards", async () => {
     findDeck.mockResolvedValue({
       id: "deck-id",
       deckCards: []

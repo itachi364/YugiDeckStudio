@@ -1,7 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { AlertCircle, CalendarDays, Images, ImageUp, ListChecks, LogIn, LogOut, ShieldCheck, Store, UserPlus } from "lucide-react";
-import { DeckImagePreviewWorkspace } from "../decks/DeckImagePreviewWorkspace";
-import { DeckReviewWorkspace } from "../decks/DeckReviewWorkspace";
+import { AlertCircle, CalendarDays, ImageUp, LogIn, LogOut, ShieldCheck, Store, UserPlus } from "lucide-react";
 import { DeckUploadWorkspace } from "../decks/DeckUploadWorkspace";
 import { SecurityWorkspace } from "../security/SecurityWorkspace";
 import { EventTypesIndexWorkspace } from "../stores/EventTypesIndexWorkspace";
@@ -17,14 +15,16 @@ type AuthMode =
   | "security"
   | "events-index"
   | "deck-upload"
-  | "deck-review"
-  | "deck-preview"
   | "store"
   | "catalogs";
 
 type AuthSession = {
   accessToken: string;
   user: AuthUser;
+};
+
+type StoredAuthSession = AuthSession & {
+  lastActivityAt: number;
 };
 
 type Feedback = {
@@ -63,16 +63,6 @@ const authModes: Array<{
     icon: ImageUp
   },
   {
-    mode: "deck-review",
-    label: "Revision",
-    icon: ListChecks
-  },
-  {
-    mode: "deck-preview",
-    label: "Imagen",
-    icon: Images
-  },
-  {
     mode: "store",
     label: "Tienda",
     icon: Store
@@ -84,11 +74,81 @@ const authModes: Array<{
   }
 ];
 
+const SESSION_STORAGE_KEY = "yugideckstudio.session";
+const SESSION_IDLE_TIMEOUT_MS = 20 * 60 * 1000;
+
 export function AuthWorkspace() {
   const [mode, setMode] = useState<AuthMode>("login");
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const [session, setSession] = useState<AuthSession | null>(() => loadStoredSession());
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (session && mode === "login") {
+      setMode(getDefaultAuthenticatedMode(session.user));
+    }
+  }, [mode, session]);
+
+  useEffect(() => {
+    if (!session) {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+      return;
+    }
+
+    persistSession(session);
+
+    const handleActivity = () => persistSession(session);
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== SESSION_STORAGE_KEY) {
+        return;
+      }
+
+      if (!event.newValue) {
+        setSession(null);
+        setMode("login");
+        setFeedback({
+          tone: "error",
+          message: "Sesion cerrada."
+        });
+        return;
+      }
+
+      const restoredSession = parseStoredSession(event.newValue);
+
+      if (restoredSession) {
+        setSession({
+          accessToken: restoredSession.accessToken,
+          user: restoredSession.user
+        });
+      }
+    };
+
+    const activityEvents: Array<keyof WindowEventMap> = ["click", "keydown", "scroll", "touchstart", "focus"];
+
+    activityEvents.forEach((eventName) => window.addEventListener(eventName, handleActivity, { passive: true }));
+    window.addEventListener("storage", handleStorage);
+
+    const intervalId = window.setInterval(() => {
+      const storedSession = readStoredSession();
+      const lastActivityAt = storedSession?.lastActivityAt ?? 0;
+
+      if (Date.now() - lastActivityAt >= SESSION_IDLE_TIMEOUT_MS) {
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+        setSession(null);
+        setMode("login");
+        setFeedback({
+          tone: "error",
+          message: "Sesion cerrada por inactividad."
+        });
+      }
+    }, 1000);
+
+    return () => {
+      activityEvents.forEach((eventName) => window.removeEventListener(eventName, handleActivity));
+      window.removeEventListener("storage", handleStorage);
+      window.clearInterval(intervalId);
+    };
+  }, [session]);
 
   const handleModeChange = (nextMode: AuthMode) => {
     if (mustChangePassword) {
@@ -291,14 +351,6 @@ export function AuthWorkspace() {
           <DeckUploadWorkspace accessToken={session.accessToken} defaultStoreId={session.user.storeId} />
         ) : null}
 
-        {visibleMode === "deck-review" && session ? (
-          <DeckReviewWorkspace accessToken={session.accessToken} />
-        ) : null}
-
-        {visibleMode === "deck-preview" && session ? (
-          <DeckImagePreviewWorkspace accessToken={session.accessToken} />
-        ) : null}
-
         {visibleMode === "store" && session ? (
           <StoreConfigurationWorkspace
             accessToken={session.accessToken}
@@ -312,6 +364,58 @@ export function AuthWorkspace() {
         ) : null}
       </section>
     </main>
+  );
+}
+
+function loadStoredSession(): AuthSession | null {
+  const storedSession = readStoredSession();
+
+  if (!storedSession) {
+    return null;
+  }
+
+  if (Date.now() - storedSession.lastActivityAt >= SESSION_IDLE_TIMEOUT_MS) {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    return null;
+  }
+
+  return {
+    accessToken: storedSession.accessToken,
+    user: storedSession.user
+  };
+}
+
+function readStoredSession(): StoredAuthSession | null {
+  const rawSession = localStorage.getItem(SESSION_STORAGE_KEY);
+
+  if (!rawSession) {
+    return null;
+  }
+
+  return parseStoredSession(rawSession);
+}
+
+function parseStoredSession(rawSession: string): StoredAuthSession | null {
+  try {
+    const parsedSession = JSON.parse(rawSession) as Partial<StoredAuthSession>;
+
+    if (!parsedSession.accessToken || !parsedSession.user || typeof parsedSession.lastActivityAt !== "number") {
+      return null;
+    }
+
+    return parsedSession as StoredAuthSession;
+  } catch {
+    return null;
+  }
+}
+
+function persistSession(session: AuthSession): void {
+  localStorage.setItem(
+    SESSION_STORAGE_KEY,
+    JSON.stringify({
+      ...session,
+      lastActivityAt: Date.now()
+    } satisfies StoredAuthSession)
   );
 }
 
@@ -334,14 +438,6 @@ function getTitle(mode: AuthMode): string {
 
   if (mode === "deck-upload") {
     return "Carga de deck";
-  }
-
-  if (mode === "deck-review") {
-    return "Revision de extraccion";
-  }
-
-  if (mode === "deck-preview") {
-    return "Imagen generada";
   }
 
   if (mode === "store") {
@@ -497,7 +593,7 @@ function getNavigationItems(session: AuthSession | null, mustChangePassword: boo
     return authModes.filter((item) => item.mode === "login");
   }
 
-  const allowedModes: AuthMode[] = ["events-index", "deck-upload", "deck-review", "deck-preview"];
+  const allowedModes: AuthMode[] = ["events-index", "deck-upload"];
 
   if (session.user.isRoot) {
     allowedModes.push("register", "security", "store", "catalogs");

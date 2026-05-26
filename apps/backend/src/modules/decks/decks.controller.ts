@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Param, Post, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Param, Post, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { ParseUUIDPipe } from "@nestjs/common";
 import { Put } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
@@ -10,10 +10,10 @@ import { StoreAccessPolicyService } from "../auth/application/store-access-polic
 import { AuthenticatedUserPayload } from "../auth/ports/auth-token.port";
 import { CacheCardImagesUseCase } from "./application/cache-card-images.use-case";
 import { ConfirmDeckReviewUseCase } from "./application/confirm-deck-review.use-case";
-import { ExtractDeckListFromImageUseCase } from "./application/extract-deck-list.use-case";
 import { GenerateDeckImageUseCase } from "./application/generate-deck-image.use-case";
+import { GetDeckCardsUseCase } from "./application/get-deck-cards.use-case";
 import { InactivateDeckUseCase } from "./application/inactivate-deck.use-case";
-import { ResolveCardNamesUseCase } from "./application/resolve-card-names.use-case";
+import { ListDecksUseCase } from "./application/list-decks.use-case";
 import { UpdateDeckCardsUseCase } from "./application/update-deck-cards.use-case";
 import { UploadDeckListUseCase } from "./application/upload-deck-list.use-case";
 import { InactivateDeckDto } from "./dto/inactivate-deck.dto";
@@ -31,10 +31,10 @@ interface UploadedDeckListFile {
 export class DecksController {
   constructor(
     private readonly uploadDeckListUseCase: UploadDeckListUseCase,
-    private readonly extractDeckListFromImageUseCase: ExtractDeckListFromImageUseCase,
+    private readonly listDecksUseCase: ListDecksUseCase,
+    private readonly getDeckCardsUseCase: GetDeckCardsUseCase,
     private readonly updateDeckCardsUseCase: UpdateDeckCardsUseCase,
     private readonly confirmDeckReviewUseCase: ConfirmDeckReviewUseCase,
-    private readonly resolveCardNamesUseCase: ResolveCardNamesUseCase,
     private readonly cacheCardImagesUseCase: CacheCardImagesUseCase,
     private readonly generateDeckImageUseCase: GenerateDeckImageUseCase,
     private readonly inactivateDeckUseCase: InactivateDeckUseCase,
@@ -61,10 +61,16 @@ export class DecksController {
     });
   }
 
-  @Post(":deckId/extract")
+  @Get()
+  @UseGuards(JwtAuthGuard)
+  listDecks(@CurrentUser() user: AuthenticatedUserPayload) {
+    return this.listDecksUseCase.execute(user);
+  }
+
+  @Get(":deckId/cards")
   @UseGuards(JwtAuthGuard, DeckScopeGuard)
-  extractDeckList(@Param("deckId", ParseUUIDPipe) deckId: string) {
-    return this.extractDeckListFromImageUseCase.execute(deckId);
+  getDeckCards(@Param("deckId", ParseUUIDPipe) deckId: string) {
+    return this.getDeckCardsUseCase.execute(deckId);
   }
 
   @Put(":deckId/cards")
@@ -80,12 +86,6 @@ export class DecksController {
   @UseGuards(JwtAuthGuard, DeckScopeGuard)
   confirmDeckReview(@Param("deckId", ParseUUIDPipe) deckId: string) {
     return this.confirmDeckReviewUseCase.execute(deckId);
-  }
-
-  @Post(":deckId/resolve-card-names")
-  @UseGuards(JwtAuthGuard, DeckScopeGuard)
-  resolveCardNames(@Param("deckId", ParseUUIDPipe) deckId: string) {
-    return this.resolveCardNamesUseCase.execute(deckId);
   }
 
   @Post(":deckId/cache-card-images")

@@ -91,45 +91,44 @@
     - Imagen de deck list almacenada localmente como asset temporal.
     - Deck inicial persistido en estado `UPLOADED`.
 
-- [x] TASK-009: Implementar puerto OCR y flujo de extracción.
+- [x] TASK-009: Implementar puerto Neuron y flujo de importacion.
   - Criterios de aceptación:
     - AC-003.
   - Pruebas:
     - Parsing de secciones.
     - Extracción de cantidades y nombres.
-    - Adaptador Tesseract OCR con salida mockeada.
+    - Adaptador Neuron/Konami con salida HTML mockeada.
   - Criterios de finalización:
-    - Contrato `POST /api/decks/{deckId}/extract` documentado.
-    - `OcrPort` y adaptador Tesseract implementados.
+    - Contrato de lectura `GET /api/decks/{deckId}/cards` documentado.
+    - `NeuronDeckImportPort` y adaptador Konami implementados.
     - Parser de secciones `MAIN`, `EXTRA` y `SIDE` implementado.
-    - Texto OCR original persistido en `Deck.rawOcrText`.
-    - Cartas extraídas persistidas como `DeckCard`.
+    - Link Neuron persistido en `Deck.neuronDeckUrl`.
+    - Cartas importadas persistidas como `DeckCard`.
 
 - [x] TASK-010: Implementar revisión y corrección obligatoria.
   - Criterios de aceptación:
     - AC-004.
     - AC-022.
   - Pruebas:
-    - Corrección de cartas no resueltas.
+    - Corrección de cartas importadas.
     - Bloqueo de generación sin revisión confirmada.
   - Criterios de finalización:
     - Contrato `PUT /api/decks/{deckId}/cards` documentado.
     - Contrato `POST /api/decks/{deckId}/review/confirm` documentado.
-    - Corrección de cartas OCR implementada.
+    - Correccion de cartas importadas implementada.
     - Confirmación de revisión implementada.
     - Política de bloqueo de generación sin revisión confirmada implementada.
 
-- [x] TASK-011: Implementar resolución de nombres de cartas en inglés.
+- [x] TASK-011: Implementar cache de metadatos de cartas con YGOPRODeck.
   - Criterios de aceptación:
     - AC-005.
   - Pruebas:
-    - Normalización.
-    - Cartas no resueltas y ambiguas.
+    - Normalizacion de nombres para consultas internas.
+    - Cartas no encontradas en cache o YGOPRODeck.
   - Criterios de finalización:
-    - Contrato `POST /api/decks/{deckId}/resolve-card-names` documentado.
-    - Normalización de nombres implementada.
-    - Resolución contra caché local de cartas implementada.
-    - Estados `RESOLVED`, `AMBIGUOUS` y `UNRESOLVED` persistidos.
+    - Normalización de nombres implementada para busqueda interna.
+    - Cache de cartas desde YGOPRODeck implementado.
+    - Cartas faltantes se reportan durante cacheo de imagenes.
 
 - [x] TASK-012: Implementar adaptador de YGOPRODeck.
   - Criterios de aceptación:
@@ -146,7 +145,7 @@
     - Búsqueda exacta `name` implementada.
     - Búsqueda difusa `fname` implementada como fallback.
     - Metadatos de cartas persistidos en caché local.
-    - Fallo de conexión manejado sin romper la resolución.
+    - Fallo de conexión manejado sin romper el cacheo.
 
 - [x] TASK-013: Implementar caché permanente de imágenes de cartas.
   - Criterios de aceptación:
@@ -262,7 +261,7 @@
     - AC-024.
     - AC-025.
   - Pruebas:
-    - Revisión OCR obligatoria.
+    - Revision de importacion Neuron obligatoria.
     - Impedir reemplazo de deck list.
     - Inactivación por `store_admin` o `root`.
     - Bloqueo de inactivación por `operator`.
@@ -347,7 +346,7 @@
     - UI muestra estado de subida y errores de validacion.
     - Pruebas frontend cubren carga exitosa y bloqueo sin imagen.
 
-- [x] TASK-024: Implementar UI de revisión de extracción.
+- [x] TASK-024: Implementar UI de revision de importacion.
   - Criterios de aceptación:
     - AC-003.
     - AC-004.
@@ -355,17 +354,16 @@
     - AC-022.
   - Pruebas:
     - Corrección.
-    - Entradas no resueltas.
+    - Entradas corregidas manualmente.
     - Confirmación de revisión.
   - Criterios de finalización:
-    - UI de revisión OCR disponible después de login.
-    - Cliente frontend consume `POST /api/decks/{deckId}/extract`.
+    - UI de revision de importacion disponible despues de login.
+    - Cliente frontend consume `GET /api/decks/{deckId}/cards`.
     - Cliente frontend consume `PUT /api/decks/{deckId}/cards`.
-    - Cliente frontend consume `POST /api/decks/{deckId}/resolve-card-names`.
     - Cliente frontend consume `POST /api/decks/{deckId}/review/confirm`.
     - UI permite corregir sección, cantidad, nombre original y orden.
-    - UI muestra texto OCR original y resultados resueltos, ambiguos y no resueltos.
-    - Pruebas frontend cubren corrección, resolución y confirmación de revisión.
+    - UI muestra cartas importadas para revision de composicion.
+    - Pruebas frontend cubren corrección y confirmación de revisión.
 
 - [x] TASK-025: Implementar UI de configuración de tienda.
   - Criterios de aceptación:
@@ -453,6 +451,136 @@
 ## Decisiones de implementación abiertas
 
 No quedan decisiones funcionales abiertas para iniciar `v0.1.0`.
+
+## Fase 7: Reemplazo de OCR por importacion Neuron
+
+- [x] TASK-041: Eliminar OCR y exigir link Neuron para composicion del deck.
+  - Criterios de aceptacion:
+    - AC-001.
+    - AC-002.
+    - AC-003.
+    - AC-004.
+    - AC-005.
+    - AC-022.
+    - AC-043.
+    - AC-044.
+    - AC-045.
+    - AC-046.
+  - Archivos:
+    - `specs/requirements.md`
+    - `specs/design.md`
+    - `specs/api-contract.md`
+    - `apps/backend/prisma/schema.prisma`
+    - `apps/backend/prisma/migrations/000004_add_neuron_deck_url/migration.sql`
+    - `apps/backend/src/modules/decks/application/upload-deck-list.use-case.ts`
+    - `apps/backend/src/modules/decks/infrastructure/konami-neuron-deck-import.adapter.ts`
+    - `apps/backend/src/modules/decks/ports/neuron-deck-import.port.ts`
+    - `apps/frontend/src/features/decks/DeckUploadWorkspace.tsx`
+    - `apps/frontend/src/features/decks/DeckReviewWorkspace.tsx`
+    - `README.md`
+  - Pruebas:
+    - Backend rechaza carga sin link Neuron.
+    - Backend rechaza dominios no permitidos.
+    - Backend importa Main, Extra y Side desde HTML de Konami.
+    - Backend no persiste deck si la importacion Neuron falla.
+    - Frontend exige link Neuron en el formulario.
+    - Frontend elimina accion de ejecutar OCR y permite revisar cartas importadas.
+  - Criterios de finalizacion:
+    - Tesseract OCR y `OcrPort` dejan de estar conectados al backend.
+    - La imagen subida queda como evidencia obligatoria.
+    - La composicion se obtiene desde link Neuron obligatorio.
+    - README y contrato API reflejan el nuevo flujo.
+
+- [x] TASK-042: Convertir resolucion de nombres en revision directa de deck.
+  - Criterios de aceptacion:
+    - AC-005.
+    - AC-022.
+    - AC-045.
+    - AC-046.
+    - AC-047.
+    - AC-048.
+  - Archivos:
+    - `apps/backend/src/modules/decks/decks.controller.ts`
+    - `apps/backend/src/modules/decks/application/list-decks.use-case.ts`
+    - `apps/backend/src/modules/decks/application/confirm-deck-review.use-case.ts`
+    - `apps/frontend/src/features/decks/DeckUploadWorkspace.tsx`
+    - `apps/frontend/src/features/decks/DeckReviewWorkspace.tsx`
+    - `apps/frontend/src/features/auth/AuthWorkspace.tsx`
+    - `specs/requirements.md`
+    - `specs/design.md`
+    - `specs/api-contract.md`
+    - `README.md`
+  - Pruebas:
+    - Backend confirma decks por composicion valida sin exigir resolucion previa.
+    - Backend lista decks por alcance de tienda y todos los decks para `root`.
+    - Frontend muestra decks cargados en la ventana de carga.
+    - Frontend abre revision desde el resultado de carga o desde la tabla.
+    - Frontend no muestra menu lateral separado de revision.
+  - Criterios de finalizacion:
+    - `POST /api/decks/{deckId}/resolve-card-names` deja de estar expuesto.
+    - La revision de deck se abre desde la pantalla `Decks`.
+    - `Confirmar deck` no depende de resultados `AMBIGUOUS` o `UNRESOLVED`.
+
+- [x] TASK-043: Corregir codificacion de consultas a YGOPRODeck para cache de imagenes.
+  - Criterios de aceptacion:
+    - AC-006.
+    - AC-007.
+    - AC-008.
+  - Archivos:
+    - `apps/backend/src/modules/decks/infrastructure/ygoprodeck-card-catalog.adapter.ts`
+    - `apps/backend/test/ygoprodeck-card-catalog.adapter.spec.ts`
+  - Pruebas:
+    - El adaptador consulta nombres con espacios usando `%20` en lugar de `+`.
+    - La busqueda exacta de `Saint Azamina` queda cubierta para evitar regresion.
+    - El fallback difuso `fname` conserva la misma codificacion compatible.
+  - Criterios de finalizacion:
+    - YGOPRODeck deja de responder `Database query parameter mismatch` por codificacion de espacios.
+    - El cache de imagenes puede resolver cartas revisadas desde Neuron cuando la API externa tiene la carta.
+
+- [x] TASK-044: Evitar truncamiento de cartas en imagen generada.
+  - Criterios de aceptacion:
+    - AC-009.
+    - AC-030.
+  - Archivos:
+    - `apps/backend/src/modules/decks/infrastructure/node-canvas-deck-image-renderer.adapter.ts`
+    - `apps/backend/test/node-canvas-deck-image-renderer.adapter.spec.ts`
+    - `specs/requirements.md`
+    - `specs/design.md`
+  - Pruebas:
+    - El renderer dibuja la ultima carta de un Main Deck de 42 cartas.
+    - La imagen generada mantiene dimensiones `1080x1350`.
+  - Criterios de finalizacion:
+    - Main Deck usa grilla adaptable para mostrar decks legales completos.
+    - Extra Deck y Side Deck conservan capacidad de 15 cartas.
+
+- [x] TASK-045: Integrar generacion de imagen en pantalla Decks y corregir estado visual.
+  - Criterios de aceptacion:
+    - AC-045.
+    - AC-047.
+    - AC-049.
+    - AC-050.
+  - Archivos:
+    - `apps/backend/src/modules/decks/application/get-deck-cards.use-case.ts`
+    - `apps/backend/test/get-deck-cards.use-case.spec.ts`
+    - `apps/frontend/src/features/auth/AuthWorkspace.tsx`
+    - `apps/frontend/src/features/decks/DeckUploadWorkspace.tsx`
+    - `apps/frontend/src/features/decks/DeckReviewWorkspace.tsx`
+    - `apps/frontend/src/features/decks/deck-api.ts`
+    - `apps/frontend/src/styles/global.css`
+    - `apps/frontend/src/App.test.tsx`
+    - `specs/requirements.md`
+    - `specs/design.md`
+    - `specs/api-contract.md`
+    - `README.md`
+  - Pruebas:
+    - Backend devuelve `reviewStatus` real en `GET /api/decks/{deckId}/cards`.
+    - Frontend no muestra menu lateral `Imagen`.
+    - Frontend genera imagen desde la fila del deck confirmado.
+    - Frontend muestra faltantes de cache desde `Decks` y no genera si hay faltantes.
+    - Frontend muestra `CONFIRMED` y bloquea reconfirmacion de decks ya confirmados.
+  - Criterios de finalizacion:
+    - `Decks` concentra revision, cacheo, generacion, previsualizacion y descarga.
+    - Las vistas principales usan ancho disponible y se adaptan a movil.
 
 ## Fase 6: Mejoras de experiencia frontend
 
@@ -544,25 +672,80 @@ No quedan decisiones funcionales abiertas para iniciar `v0.1.0`.
     - La validacion multi-tienda se ejecuta despues de `FileInterceptor`.
     - La carga de deck con tienda seleccionada no falla por `storeId` ausente en el guard.
 
-- [x] TASK-037: Implementar alias de cartas en espanol y variantes OCR.
+- [x] TASK-037: Implementar alias de cartas en espanol y variantes manuales.
   - Criterios de aceptacion:
     - AC-043.
   - Pruebas:
     - Alias espanol exacto resuelve contra nombre oficial en ingles.
-    - Variante OCR comun resuelve contra el mismo nombre oficial.
+    - Variante manual comun resuelve contra el mismo nombre oficial.
     - Si no hay alias ni resultado externo, la carta queda no resuelta.
   - Criterios de finalizacion:
     - Catalogo local de alias implementado.
     - El adaptador de YGOPRODeck consulta cache/API usando el alias oficial en ingles cuando exista.
     - Pruebas backend cubren alias y fallback sin internet.
 
-- [x] TASK-038: Ejecutar OCR por regiones para plantilla KDE.
+- [x] TASK-038: Importar deck desde Yu-Gi-Oh! Neuron.
   - Criterios de aceptacion:
     - AC-044.
   - Pruebas:
-    - El adaptador OCR llama Tesseract con regiones de monstruos, magicas, trampas, extra deck y side deck.
+    - El adaptador Neuron parsea monstruos, magicas, trampas, extra deck y side deck desde HTML de Konami.
     - El texto devuelto contiene encabezados logicos para que el parser conserve secciones.
   - Criterios de finalizacion:
-    - `TesseractOcrAdapter` calcula regiones relativas al tamano de imagen.
-    - La salida OCR por regiones se ensambla con encabezados `Main Deck`, `Extra Deck` y `Side Deck`.
+    - `KonamiNeuronDeckImportAdapter` valida dominios Konami permitidos.
+    - La salida Neuron se ensambla como cartas `MAIN`, `EXTRA` y `SIDE`.
     - Pruebas backend actualizadas.
+
+- [x] TASK-039: Mejorar flujo seguro de revision de deck en frontend.
+  - Criterios de aceptacion:
+    - AC-045.
+  - Pruebas:
+    - `Confirmar deck` se deshabilita mientras existan cambios sin guardar.
+    - El usuario puede eliminar un registro importado incorrecto y persistir la lista corregida.
+    - La revision muestra el listado completo con seccion, cantidad, nombre y orden.
+    - `Confirmar deck` permanece deshabilitado si la composicion no es valida.
+  - Criterios de finalizacion:
+    - UI de revision permite eliminar filas importadas.
+    - UI obliga a guardar correcciones antes de confirmar.
+    - UI muestra composicion completa para validacion visual.
+    - Pruebas frontend actualizadas.
+
+- [x] TASK-040: Bloquear confirmacion y generacion de decks incompletos.
+  - Criterios de aceptacion:
+    - AC-046.
+  - Pruebas:
+    - Importador conserva cartas parseadas desde Neuron con cantidades validas.
+    - Backend bloquea confirmacion si `Main Deck` no tiene entre 40 y 60 cartas o si `Extra Deck`/`Side Deck` superan 15.
+    - Backend bloquea generacion de imagen para decks incompletos.
+    - Frontend muestra conteos por seccion, permite agregar cartas y mantiene `Confirmar revision` deshabilitado si la composicion no es valida.
+  - Criterios de finalizacion:
+    - Importador Neuron evita crear decks sin cartas parseables.
+    - Validacion de composicion reutilizable implementada.
+    - UI de revision permite completar manualmente un deck antes de resolver y confirmar.
+    - Pruebas backend y frontend actualizadas.
+
+- [x] TASK-041: Abrir revision e imagen desde Decks con modal desktop, vista mobile y sesion persistente.
+  - Criterios de aceptacion:
+    - AC-051.
+    - AC-052.
+    - AC-053.
+  - Archivos:
+    - `apps/frontend/src/features/decks/DeckUploadWorkspace.tsx`
+    - `apps/frontend/src/features/auth/AuthWorkspace.tsx`
+    - `apps/frontend/src/styles/global.css`
+    - `apps/frontend/src/App.test.tsx`
+    - `specs/requirements.md`
+    - `specs/design.md`
+    - `specs/tasks.md`
+    - `README.md`
+  - Pruebas:
+    - Desktop abre revision en dialog modal.
+    - Desktop abre generacion de imagen en dialog modal.
+    - Mobile abre revision y generacion como vistas completas sin dialog modal.
+    - Refresco de aplicacion restaura una sesion con menos de 20 minutos de inactividad.
+    - Sesion almacenada con 20 minutos o mas de inactividad se limpia y vuelve a login.
+  - Criterios de finalizacion:
+    - El menu lateral no incluye revision ni imagen como modulos separados.
+    - `Decks` conserva acciones directas `Revisar` y `Generar imagen`.
+    - Los modales desktop tienen cierre explicito y scroll interno.
+    - Las vistas mobile tienen accion `Volver`.
+    - La sesion local se guarda con `lastActivityAt` y se elimina por inactividad.

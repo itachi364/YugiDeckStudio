@@ -85,7 +85,7 @@ describe("YgoprodeckCardCatalogAdapter", () => {
     ]);
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://db.ygoprodeck.com/api/v7/cardinfo.php?name=Blue-Eyes+White+Dragon"
+      "https://db.ygoprodeck.com/api/v7/cardinfo.php?name=Blue-Eyes%20White%20Dragon"
     );
     expect(upsert).toHaveBeenCalledWith({
       where: {
@@ -109,7 +109,7 @@ describe("YgoprodeckCardCatalogAdapter", () => {
     });
   });
 
-  it("uses Spanish and OCR aliases before looking up YGOPRODeck", async () => {
+  it("uses Spanish and manual correction aliases before looking up YGOPRODeck", async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: jest.fn().mockResolvedValue({
@@ -137,8 +137,42 @@ describe("YgoprodeckCardCatalogAdapter", () => {
     ]);
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://db.ygoprodeck.com/api/v7/cardinfo.php?name=Deception+of+the+Sinful+Spoils"
+      "https://db.ygoprodeck.com/api/v7/cardinfo.php?name=Deception%20of%20the%20Sinful%20Spoils"
     );
+  });
+
+  it("encodes spaces with percent encoding for YGOPRODeck compatibility", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 85065943,
+            name: "Saint Azamina",
+            type: "Fusion Monster",
+            frameType: "fusion",
+            card_images: [
+              {
+                image_url: "https://images.ygoprodeck.com/images/cards/85065943.jpg"
+              }
+            ]
+          }
+        ]
+      })
+    });
+    upsert.mockResolvedValue({
+      id: "card-saint-azamina",
+      officialName: "Saint Azamina"
+    });
+
+    await expect(adapter.findCandidates("Saint Azamina")).resolves.toEqual([
+      {
+        id: "card-saint-azamina",
+        officialName: "Saint Azamina"
+      }
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledWith("https://db.ygoprodeck.com/api/v7/cardinfo.php?name=Saint%20Azamina");
   });
 
   it("falls back to fuzzy search when exact lookup has no results", async () => {
@@ -174,11 +208,11 @@ describe("YgoprodeckCardCatalogAdapter", () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      "https://db.ygoprodeck.com/api/v7/cardinfo.php?name=Dark+Magic"
+      "https://db.ygoprodeck.com/api/v7/cardinfo.php?name=Dark%20Magic"
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=Dark+Magic"
+      "https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=Dark%20Magic"
     );
   });
 

@@ -1,4 +1,4 @@
-# ADR-006: Ciclo de vida del deck, retención y generación sin internet
+﻿# ADR-006: Ciclo de vida del deck, retención y generación sin internet
 
 ## Estado
 
@@ -6,7 +6,7 @@ Propuesto
 
 ## Contexto
 
-YugiDeckStudio debe permitir cargar deck lists, corregir resultados OCR, generar imágenes y conservar trazabilidad sin permitir que los operadores reemplacen información histórica después de generar una imagen.
+YugiDeckStudio debe permitir cargar deck lists, corregir resultados importados desde Neuron, generar imágenes y conservar trazabilidad sin permitir que los operadores reemplacen información histórica después de generar una imagen.
 
 También debe funcionar localmente y minimizar dependencia de internet cuando ya exista caché de cartas.
 
@@ -23,8 +23,8 @@ El ciclo de vida de un deck en `v0.1.0` tendrá estados:
 Reglas:
 
 - Una vez subido un deck, no se puede reemplazar el deck list sobre el mismo registro.
-- Antes de generar la imagen final, el operador puede corregir la extracción OCR y nombres de cartas.
-- La revisión OCR es obligatoria antes de generar imagen.
+- Antes de generar la imagen final, el operador puede revisar la composicion importada desde Neuron, agregar cartas faltantes y eliminar cartas incorrectas.
+- La revision de importacion Neuron es obligatoria antes de generar imagen.
 - Después de generar la imagen, el operador no puede eliminar ni inactivar el deck.
 - Después de generar la imagen, solo `store_admin` o `root` pueden inactivar el deck.
 - La inactivación del deck será soft delete o cambio de estado, conservando data histórica.
@@ -47,7 +47,7 @@ Si existe fondo propio activo, se usa con prioridad. Si no existe, se usa el col
 Positivas:
 
 - Mejora trazabilidad del deck.
-- Reduce errores de OCR al exigir revisión.
+- Reduce errores de captura al importar desde una fuente estructurada y exigir revision.
 - Evita pérdida total de datos con soft delete.
 - Permite uso local sin internet cuando el caché está completo.
 
@@ -60,7 +60,7 @@ Negativas:
 ## Pruebas requeridas
 
 - No se puede reemplazar un deck list ya subido.
-- No se puede generar imagen sin revisión OCR.
+- No se puede generar imagen sin revision de importacion Neuron.
 - `operator` no puede inactivar deck generado.
 - `store_admin` y `root` pueden inactivar deck generado.
 - La inactivación conserva data en base de datos.

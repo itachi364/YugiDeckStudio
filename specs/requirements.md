@@ -1,10 +1,10 @@
-# YugiDeckStudio v0.1.0 - Requisitos
+﻿# YugiDeckStudio v0.1.0 - Requisitos
 
 ## 1. Propósito
 
 YugiDeckStudio es una aplicación web local con frontend y backend para visualización de decks de torneos de Yu-Gi-Oh!.
 
-La aplicación permite que una tienda u organizador de torneos suba una imagen de deck list, extraiga la lista de cartas, resuelva los nombres de las cartas en inglés, obtenga metadatos e imágenes desde YGOPRODeck, persista la información resultante en PostgreSQL y genere una imagen compartible del deck similar a gráficos de Top Cut.
+La aplicación permite que una tienda u organizador de torneos suba una imagen de deck list como evidencia, incluya un link público de Yu-Gi-Oh! Neuron para importar la lista estructurada de cartas, revise la composicion del deck, obtenga metadatos e imágenes desde YGOPRODeck usando los nombres revisados, persista la información resultante en PostgreSQL y genere una imagen compartible del deck similar a gráficos de Top Cut.
 
 ## 2. Alcance
 
@@ -12,10 +12,11 @@ La versión `v0.1.0` se enfoca en ejecución local únicamente.
 
 Incluye:
 
-- Subir una imagen de deck list.
+- Subir una imagen de deck list como evidencia obligatoria.
+- Incluir un link público de Yu-Gi-Oh! Neuron como fuente obligatoria de composición del deck.
 - Capturar metadatos del jugador, torneo y deck.
-- Extraer nombres y cantidades de cartas desde la imagen subida.
-- Resolver los nombres de cartas a su nombre en inglés.
+- Extraer nombres y cantidades de cartas desde la página pública de Yu-Gi-Oh! Neuron.
+- Revisar la composicion importada del deck sin un paso manual separado de resolucion de nombres.
 - Buscar cartas en la API de YGOPRODeck.
 - Persistir información de deck, cartas, jugador, torneo, configuración e imagen generada.
 - Guardar imágenes en almacenamiento local administrado por Docker.
@@ -29,10 +30,9 @@ Incluye:
 - Permitir que `root` configure el primer usuario administrador de tienda.
 - Configurar tipos de usuario/roles y permisos.
 - Soportar múltiples tiendas con aislamiento de información por tienda.
-- Exigir revisión OCR obligatoria antes de generar imágenes.
+- Exigir revisión obligatoria de la lista importada desde Neuron antes de generar imágenes.
 - Aplicar ciclo de vida de decks con corrección previa a generación y soft delete posterior.
 - Ejecutar una depuración semanal de imágenes temporales.
-- Usar Tesseract OCR como motor OCR local y open source.
 - Usar node-canvas para renderizar imágenes del deck.
 
 No incluye en `v0.1.0`:
@@ -43,7 +43,7 @@ No incluye en `v0.1.0`:
 - CDN.
 - Acceso público desde fuera de la máquina o red local donde se ejecute Docker.
 
-Los links de Yu-Gi-Oh! Neuron quedan fuera del alcance de importación automática en `v0.1.0`, porque el link entregado parece requerir un dispositivo con Yu-Gi-Oh! Neuron instalado o un flujo de deep link específico de la app. La fuente de importación soportada para esta versión será la imagen de deck list subida.
+El OCR queda fuera del alcance funcional desde esta regla de negocio. La imagen subida se conserva como evidencia/auditoría, pero no se usa para extraer la composición del deck. La fuente soportada para composición de deck en `v0.1.0` será el link público de Yu-Gi-Oh! Neuron, que redirige a la base de datos pública de Konami y permite obtener una lista estructurada por HTML.
 
 ## 3. Referencias externas
 
@@ -66,12 +66,13 @@ Restricciones importantes de integración:
 
 ## 5. Requisitos funcionales
 
-### REQ-001: Subir imagen de deck list
+### REQ-001: Subir imagen de deck list y link Neuron
 
-La aplicación debe permitir que un operador suba una imagen de deck list.
+La aplicación debe permitir que un operador suba una imagen de deck list como evidencia y debe exigir un link público de Yu-Gi-Oh! Neuron para obtener la composición del deck.
 
 Metadatos obligatorios durante la carga:
 
+- Link público de Yu-Gi-Oh! Neuron.
 - Nombre del jugador.
 - Fecha del torneo.
 - Resultado del torneo, ya sea posición de Top o estado de ganador.
@@ -85,17 +86,23 @@ Metadatos opcionales:
 - Nombre de tienda u organizador.
 - Ciudad o ubicación del evento.
 
-### REQ-002: Extraer deck list desde imagen
+### REQ-002: Importar deck list desde Yu-Gi-Oh! Neuron
 
-La aplicación debe procesar la imagen de deck list subida y extraer cantidades, nombres de cartas y secciones: Main Deck, Extra Deck y Side Deck.
+La aplicación debe consultar el link público de Yu-Gi-Oh! Neuron indicado durante la carga y extraer cantidades, nombres de cartas y secciones: Main Deck, Extra Deck y Side Deck.
 
-La aplicación debe conservar el texto original extraído para auditoría y corrección.
+La aplicación debe seguir redirecciones válidas desde `https://neuron.konami.net/link/...` hacia `https://www.db.yugioh-card.com/yugiohdb/member_deck.action...`.
 
-### REQ-003: Resolver nombres de cartas en inglés
+La aplicación debe rechazar links que no pertenezcan a dominios Konami permitidos o que no devuelvan una lista de deck parseable.
 
-La aplicación debe resolver los nombres extraídos a nombres de cartas en inglés antes de consultar YGOPRODeck.
+La aplicación debe conservar el link Neuron asociado al deck para auditoría.
 
-La aplicación debe permitir corrección manual cuando el OCR o la resolución de nombres falle.
+### REQ-003: Revisar composicion del deck
+
+La aplicación debe conservar los nombres oficiales importados desde Neuron y permitir que el usuario revise la composicion del deck antes de confirmarlo.
+
+La aplicación debe permitir agregar cartas faltantes, eliminar cartas que no pertenezcan al deck y corregir seccion, cantidad, nombre y orden antes de confirmar el deck.
+
+La aplicación no debe exponer al usuario un paso separado de resolucion de nombres. Cuando se cacheen imagenes, el backend debe usar los nombres revisados como entrada para consultar YGOPRODeck y obtener metadatos e imagenes.
 
 ### REQ-004: Obtener información de cartas desde YGOPRODeck
 
@@ -113,7 +120,7 @@ Las imágenes cacheadas de cartas se consideran assets permanentes y no deben se
 
 ### REQ-006: Persistir información del deck
 
-La aplicación debe persistir metadatos de deck list subida, jugador, torneo, deck, secciones, cantidades, cartas resueltas, imagen generada y configuración de tienda.
+La aplicación debe persistir metadatos de deck list subida, jugador, torneo, deck, secciones, cantidades, cartas revisadas, imagen generada y configuración de tienda.
 
 ### REQ-007: Generar imagen del deck
 
@@ -161,7 +168,7 @@ Permisos iniciales:
 
 - `root`: todos los permisos sobre todas las tiendas.
 - `store_admin`: administrar configuración, eventos, torneos, redes, logos, usuarios operadores, decks e imágenes de su tienda.
-- `operator`: subir deck lists, revisar extracción, corregir cartas antes de generación, generar imágenes y descargar imágenes de su tienda.
+- `operator`: subir deck lists, revisar importacion, corregir cartas antes de generación, generar imágenes y descargar imágenes de su tienda.
 
 ### REQ-011: Previsualizar y descargar
 
@@ -171,9 +178,9 @@ La aplicación debe permitir previsualizar y descargar la imagen generada desde 
 
 Una vez subido un deck, no debe permitirse recargar o reemplazar el deck list sobre el mismo registro.
 
-Antes de generar la imagen final, el operador debe poder corregir la extracción OCR y nombres de cartas.
+Antes de generar la imagen final, el operador debe poder revisar y corregir la lista importada desde Neuron.
 
-La revisión OCR debe ser obligatoria antes de generar la imagen.
+La revisión de la importación Neuron debe ser obligatoria antes de generar la imagen.
 
 Después de generar la imagen, solo `store_admin` o `root` pueden inactivar el deck para permitir que el operador cargue un nuevo deck.
 
@@ -227,7 +234,6 @@ El proyecto debe usar:
 
 - Backend: NestJS + TypeScript.
 - Frontend: React + Vite + TypeScript.
-- OCR: Tesseract OCR.
 - Renderizado de imágenes: node-canvas.
 - ORM y migraciones: Prisma.
 - Pruebas backend: Jest.
@@ -267,7 +273,7 @@ Las operaciones protegidas deben aplicar autorización por permisos y alcance po
 
 ### NFR-005: Observabilidad
 
-Las operaciones backend deben usar logs estructurados para carga de archivos, OCR, resolución de cartas, llamadas a API, generación de imágenes y depuración de imágenes.
+Las operaciones backend deben usar logs estructurados para carga de archivos, importación Neuron, revision de deck, llamadas a API, generación de imágenes y depuración de imágenes.
 
 ### NFR-006: Mantenibilidad
 
@@ -277,23 +283,25 @@ El código debe seguir SOLID, Clean Code y las reglas del `AGENTS.md` local del 
 
 ### AC-001: Carga de deck list
 
-Dado que un operador sube una imagen válida de deck list y los metadatos obligatorios, cuando envía la carga, entonces el sistema almacena los metadatos y deja iniciada o preparada la extracción del deck.
+Dado que un operador sube una imagen válida de deck list, incluye un link público válido de Neuron y los metadatos obligatorios, cuando envía la carga, entonces el sistema almacena los metadatos, conserva la imagen como evidencia e importa la composición del deck desde Neuron.
 
 ### AC-002: Validación de metadatos obligatorios
 
-Dado que un operador omite nombre del jugador, fecha del torneo, resultado del torneo o nombre del deck, cuando envía la carga, entonces el sistema rechaza la solicitud con errores de validación.
+Dado que un operador omite link Neuron, nombre del jugador, fecha del torneo, resultado del torneo o nombre del deck, cuando envía la carga, entonces el sistema rechaza la solicitud con errores de validación.
 
-### AC-003: Extracción OCR del deck
+### AC-003: Importación Neuron del deck
 
-Dada una imagen legible de deck list, cuando se ejecuta la extracción, entonces el sistema identifica entradas de Main Deck, Extra Deck y Side Deck con cantidades y nombres originales extraídos.
+Dado un link público válido de Yu-Gi-Oh! Neuron, cuando se carga el deck, entonces el sistema identifica entradas de Main Deck, Extra Deck y Side Deck con cantidades y nombres oficiales importados.
 
 ### AC-004: Corrección manual
 
-Dado que una o más cartas extraídas no pueden resolverse con confianza, cuando el operador revisa la extracción, entonces el sistema permite la corrección manual antes de generar la imagen final.
+Dado que una o más cartas importadas requieren ajuste, cuando el operador revisa la lista, entonces el sistema permite la corrección manual antes de generar la imagen final.
 
-### AC-005: Resolución de nombres en inglés
+### AC-005: Revisión de deck sin resolución manual
 
-Dado que los nombres extraídos están en español o tienen errores de OCR, cuando se ejecuta la resolución, entonces el sistema los mapea a nombres en inglés o los marca como no resueltos.
+Dado que los nombres importados desde Neuron son la fuente confiable del deck, cuando el usuario revisa la composicion, entonces puede confirmar el deck sin ejecutar un paso separado de resolucion de nombres.
+
+Dado que el usuario detecta una carta faltante o incorrecta, cuando revisa el deck, entonces puede agregarla, editarla o eliminarla antes de confirmar.
 
 ### AC-006: Consulta a YGOPRODeck
 
@@ -310,6 +318,8 @@ Dada una URL de imagen de carta de YGOPRODeck, cuando la imagen se necesita por 
 ### AC-009: Contenido de imagen generada
 
 Dado un deck validado y una configuración de branding, cuando se genera la imagen, entonces el resultado incluye Main Deck, Extra Deck, Side Deck, nombre del jugador, fecha del torneo, resultado del torneo, nombre del deck, logos, redes sociales y credito inferior/fuente del deck list.
+
+Dado un deck validado con cantidades legales, cuando se genera la imagen, entonces todas las cartas expandidas por cantidad deben renderizarse en su sección correspondiente sin truncarse.
 
 ### AC-010: Configuración de tienda, eventos, torneos y redes
 
@@ -361,7 +371,7 @@ Dado que un usuario no-root de una tienda intenta acceder a información de otra
 
 ### AC-022: Corrección previa a generación
 
-Dado que un deck fue subido y OCR fue ejecutado, cuando la revisión no ha sido confirmada, entonces el sistema no permite generar la imagen final.
+Dado que un deck fue subido e importado desde Neuron, cuando la revisión no ha sido confirmada, entonces el sistema no permite generar la imagen final.
 
 ### AC-023: No reemplazar deck subido
 
@@ -477,19 +487,87 @@ Dado que un usuario autenticado carga un deck list mediante `multipart/form-data
 
 Dado que un usuario intenta cargar un deck para una tienda fuera de su alcance, cuando envia la solicitud multipart, entonces el sistema debe rechazar la operacion sin crear el deck.
 
-### AC-043: Alias de cartas en espanol y variantes OCR
+### AC-043: Link Neuron obligatorio y seguro
 
-Dado que el OCR devuelve nombres en espanol o variantes con errores comunes de lectura, cuando se ejecuta la resolucion de nombres, entonces el sistema debe intentar convertirlos a un nombre oficial en ingles antes de consultar cache local o YGOPRODeck.
+Dado que un operador carga un deck sin link Neuron, cuando envía el formulario, entonces el frontend y backend bloquean la carga e indican que el link es obligatorio.
 
-Dado que un alias local coincide con una unica carta oficial, cuando se resuelve la carta, entonces debe quedar marcada como `RESOLVED` contra la carta oficial obtenida desde cache o YGOPRODeck.
+Dado que un operador informa un link fuera de los dominios Konami permitidos, cuando el backend valida la carga, entonces rechaza la solicitud sin crear el deck.
 
-Dado que no existe alias ni coincidencia confiable, cuando se resuelve la carta, entonces debe conservarse como `UNRESOLVED` para correccion manual.
+Dado que el link Neuron devuelve HTML sin una lista de deck parseable, cuando el backend intenta importar el deck, entonces rechaza la solicitud sin crear un deck incompleto.
 
-### AC-044: OCR por regiones para plantilla KDE
+### AC-044: Importación estructurada desde Neuron
 
-Dada una imagen de deck list con la plantilla KDE de tres columnas superiores y dos columnas inferiores, cuando se ejecuta OCR, entonces el sistema debe leer regiones separadas para monstruos, magicas, trampas, extra deck y side deck, y debe entregar el texto con encabezados de seccion para mejorar el parseo.
+Dado que Konami publica el deck en HTML estructurado, cuando el backend importa el deck, entonces debe leer filas de Main Deck, Extra Deck y Side Deck usando cantidades y nombres oficiales.
 
-Dado que el OCR por regiones no detecta texto util, cuando se ejecuta la extraccion, entonces el flujo conserva el comportamiento de marcar la extraccion como fallida y permitir correccion manual posterior.
+Dado que el HTML de Konami incluye cantidades con saltos de línea o entidades HTML, cuando se parsea la lista, entonces el sistema normaliza esos valores y conserva las cantidades correctas.
+
+### AC-045: Flujo seguro de revisión de importación en frontend
+
+Dado que el usuario revisa las cartas importadas, cuando detecta registros incorrectos, entonces debe poder eliminar registros individuales antes de guardar correcciones.
+
+Dado que existen cambios locales sin guardar en las cartas importadas, cuando el usuario revisa la pantalla, entonces la accion `Confirmar deck` debe permanecer deshabilitada hasta guardar los cambios.
+
+Dado que el usuario acaba de cargar un deck o consulta la tabla de decks cargados, cuando selecciona `Revisar deck`, entonces la aplicacion debe abrir directamente la revision de ese deck sin exigir digitar manualmente el Deck ID.
+
+Dado que un usuario autenticado abre la ventana de carga de decks, cuando consulta los decks cargados, entonces ve una tabla de decks visibles segun su alcance de tienda.
+
+### AC-046: Revision completa antes de confirmar o generar imagen
+
+Dado que el importador Neuron obtiene cartas, cuando el usuario revisa la lista editable, entonces debe mostrar conteos por `Main Deck`, `Extra Deck` y `Side Deck`, calculados por suma de cantidades.
+
+Dado que faltan cartas para una composicion valida de deck, cuando el usuario intenta confirmar revision, entonces el sistema debe bloquear la confirmacion e indicar que `Main Deck` debe tener entre 40 y 60 cartas, `Extra Deck` maximo 15 y `Side Deck` maximo 15.
+
+Dado que la importación Neuron requiere ajuste manual, cuando el usuario corrige el deck, entonces debe poder agregar filas manualmente antes de guardar correcciones y resolver nombres.
+
+Dado que un deck incompleto ya tiene revision confirmada por datos historicos o por error, cuando se intenta generar imagen, entonces el backend debe bloquear la generacion por composicion invalida.
+
+### AC-047: Listado de decks por alcance de tienda
+
+Dado que un usuario no-root abre la ventana de carga de decks, cuando el frontend consulta los decks cargados, entonces solo se muestran decks de su tienda vinculada.
+
+Dado que `root` abre la ventana de carga de decks, cuando el frontend consulta los decks cargados, entonces se muestran decks de todas las tiendas.
+
+### AC-048: Revisión directa desde carga y listado
+
+Dado que un deck se carga correctamente, cuando se muestra el resultado de carga, entonces existe una accion `Revisar deck` que abre la revision de ese deck.
+
+Dado que la ventana de carga lista decks existentes, cuando el usuario selecciona la accion `Revisar`, entonces se abre la revision del deck seleccionado.
+
+Dado que la revision se abre desde la carga o el listado, cuando el usuario navega la aplicacion, entonces no existe un menu lateral separado de revision.
+
+### AC-049: Generacion directa desde listado de decks
+
+Dado que un deck tiene revision confirmada, cuando el usuario consulta la pantalla `Decks`, entonces puede seleccionar `Generar imagen` desde la fila del deck sin abrir un menu separado de imagen.
+
+Dado que el usuario selecciona `Generar imagen`, cuando el backend cachea cartas y no hay faltantes, entonces la aplicacion genera, previsualiza y permite descargar el PNG desde la misma pantalla `Decks`.
+
+Dado que faltan cartas o imagenes durante el cacheo, cuando el usuario intenta generar la imagen, entonces la pantalla `Decks` muestra las dependencias faltantes y no ejecuta la generacion final.
+
+### AC-050: Layout responsive de aplicacion
+
+Dado que el usuario abre la aplicacion en navegador de escritorio, cuando navega cualquier modulo, entonces la vista usa el ancho disponible del navegador sin limitar el workspace principal a una columna estrecha.
+
+Dado que el usuario abre la aplicacion en celular, cuando navega formularios, listados, revision de deck o previsualizacion de imagen, entonces los controles y filas se adaptan a una sola columna sin desbordar horizontalmente.
+
+### AC-051: Revision y generacion en modales desktop
+
+Dado que el usuario abre la aplicacion en navegador de escritorio, cuando selecciona `Revisar` desde la tabla de decks, entonces la revision del deck se abre en un modal sin salir de la pantalla `Decks`.
+
+Dado que el usuario abre la aplicacion en navegador de escritorio, cuando selecciona `Generar imagen` desde un deck confirmado, entonces el cacheo, generacion, previsualizacion y descarga se muestran en un modal sin usar un menu lateral separado.
+
+### AC-052: Revision y generacion en mobile sin perder sesion
+
+Dado que el usuario abre la aplicacion en celular, cuando selecciona `Revisar` o `Generar imagen`, entonces la aplicacion abre una vista interna completa adaptada al ancho del dispositivo en lugar de usar un modal.
+
+Dado que la vista mobile cambia entre `Decks`, revision y generacion, cuando el usuario navega o refresca el navegador, entonces la sesion autenticada debe conservarse mientras no supere el tiempo de inactividad permitido.
+
+### AC-053: Sesion local con inactividad de 20 minutos
+
+Dado que un usuario autenticado refresca la aplicacion con F5, cuando la ultima actividad registrada fue hace menos de 20 minutos, entonces el frontend restaura la sesion y no exige login nuevamente.
+
+Dado que un usuario autenticado no realiza actividad durante 20 minutos o mas, cuando el frontend evalua la sesion local, entonces cierra la sesion, elimina el token almacenado localmente y vuelve al login.
+
+Dado que un usuario cierra sesion manualmente en una pestana, cuando hay otra pestana de la aplicacion abierta, entonces la otra pestana debe limpiar la sesion local y regresar al login.
 
 ## 8. Preguntas abiertas
 

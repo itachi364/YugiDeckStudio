@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, NotFoundException } from "@nestjs/common";
+﻿import { BadRequestException, ConflictException, NotFoundException } from "@nestjs/common";
 import { DeckSection, ExtractionStatus, ResolutionStatus, ReviewStatus } from "@prisma/client";
 import { UpdateDeckCardsUseCase } from "../src/modules/decks/application/update-deck-cards.use-case";
 
@@ -70,7 +70,7 @@ describe("UpdateDeckCardsUseCase", () => {
     expect(result.cards[0].originalName).toBe("Silvy del Bosque Blanco");
   });
 
-  it("rejects correction before OCR extraction", async () => {
+  it("rejects correction before Neuron import", async () => {
     findDeck.mockResolvedValue({
       id: "deck-id",
       extractionStatus: ExtractionStatus.PENDING,

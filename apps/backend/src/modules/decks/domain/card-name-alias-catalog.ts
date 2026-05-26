@@ -46,7 +46,7 @@ const CARD_NAME_ALIAS_ENTRIES: CardNameAliasEntry[] = [
   },
   {
     officialName: "Diabellze the White Witch",
-    aliases: ["Diabellze la Bruja Blanca", "Diabelze la Bruja Blanca"]
+    aliases: ["Diabellze la Bruja Blanca", "Diabelze la Bruja Blanca", "Diabellize la Bruja Blanca", "Diabelize la Bruja Blanca"]
   },
   {
     officialName: "Diabellstar Vengeance",

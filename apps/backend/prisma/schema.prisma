@@ -224,7 +224,7 @@ model Deck {
   deckName             String
   resultLabel          String
   uploadedImageAssetId String
-  rawOcrText           String?
+  neuronDeckUrl        String
   extractionStatus     ExtractionStatus @default(PENDING)
   reviewStatus         ReviewStatus     @default(PENDING)
   status               DeckStatus       @default(UPLOADED)

@@ -1,5 +1,6 @@
 import { BadRequestException } from "@nestjs/common";
 import { DeckSection, DeckStatus, ImageAssetCategory, RetentionPolicy } from "@prisma/client";
+import { DeckCompositionPolicyService } from "../src/modules/decks/application/deck-composition-policy.service";
 import { GenerateDeckImageUseCase } from "../src/modules/decks/application/generate-deck-image.use-case";
 
 describe("GenerateDeckImageUseCase", () => {
@@ -12,6 +13,7 @@ describe("GenerateDeckImageUseCase", () => {
   const saveGeneratedDeckImage = jest.fn();
   const assertCanGenerateImage = jest.fn();
   const render = jest.fn();
+  const compositionPolicy = new DeckCompositionPolicyService();
 
   const useCase = new GenerateDeckImageUseCase(
     {
@@ -27,6 +29,7 @@ describe("GenerateDeckImageUseCase", () => {
     {
       assertCanGenerateImage
     } as never,
+    compositionPolicy,
     {
       render
     }
@@ -58,22 +61,7 @@ describe("GenerateDeckImageUseCase", () => {
         backgroundImageAsset: null,
         socialLinks: []
       },
-      deckCards: [
-        {
-          id: "deck-card-1",
-          section: DeckSection.MAIN,
-          quantity: 3,
-          originalName: "Blue Eyes White Dragon",
-          displayOrder: 1,
-          card: {
-            officialName: "Blue-Eyes White Dragon",
-            imageAsset: {
-              storagePath: "card-images/89631139.jpg",
-              deletedAt: null
-            }
-          }
-        }
-      ]
+      deckCards: buildRenderableMainDeck(40)
     });
     render.mockResolvedValue({
       buffer: Buffer.from("png"),
@@ -122,15 +110,15 @@ describe("GenerateDeckImageUseCase", () => {
         resultLabel: "Top 8",
         deckName: "Blue-Eyes",
         backgroundColor: "#111827",
-        cards: [
-          {
+        cards: expect.arrayContaining([
+          expect.objectContaining({
             section: DeckSection.MAIN,
-            quantity: 3,
+            quantity: 1,
             name: "Blue-Eyes White Dragon",
             imagePath: "C:\\images\\card-images/89631139.jpg",
             displayOrder: 1
-          }
-        ]
+          })
+        ])
       })
     );
     expect(saveGeneratedDeckImage).toHaveBeenCalledWith(Buffer.from("png"));
@@ -191,6 +179,8 @@ describe("GenerateDeckImageUseCase", () => {
       deckCards: [
         {
           id: "deck-card-1",
+          section: DeckSection.MAIN,
+          quantity: 40,
           originalName: "Unknown Card",
           card: null
         }
@@ -207,6 +197,8 @@ describe("GenerateDeckImageUseCase", () => {
       deckCards: [
         {
           id: "deck-card-1",
+          section: DeckSection.MAIN,
+          quantity: 40,
           originalName: "Blue Eyes White Dragon",
           card: {
             officialName: "Blue-Eyes White Dragon",
@@ -219,4 +211,31 @@ describe("GenerateDeckImageUseCase", () => {
     await expect(useCase.execute("deck-id")).rejects.toBeInstanceOf(BadRequestException);
     expect(render).not.toHaveBeenCalled();
   });
+
+  it("blocks generation when deck composition is incomplete", async () => {
+    findDeck.mockResolvedValue({
+      id: "deck-id",
+      deckCards: buildRenderableMainDeck(3)
+    });
+
+    await expect(useCase.execute("deck-id")).rejects.toBeInstanceOf(BadRequestException);
+    expect(render).not.toHaveBeenCalled();
+  });
 });
+
+function buildRenderableMainDeck(count: number) {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `deck-card-${index + 1}`,
+    section: DeckSection.MAIN,
+    quantity: 1,
+    originalName: "Blue Eyes White Dragon",
+    displayOrder: index + 1,
+    card: {
+      officialName: "Blue-Eyes White Dragon",
+      imageAsset: {
+        storagePath: "card-images/89631139.jpg",
+        deletedAt: null
+      }
+    }
+  }));
+}

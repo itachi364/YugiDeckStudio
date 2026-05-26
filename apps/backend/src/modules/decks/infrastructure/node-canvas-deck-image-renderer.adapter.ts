@@ -15,6 +15,13 @@ interface LayoutBox {
   height: number;
 }
 
+interface CardGridLayout {
+  columns: number;
+  gap: number;
+  cardWidth: number;
+  cardHeight: number;
+}
+
 @Injectable()
 export class NodeCanvasDeckImageRendererAdapter implements DeckImageRendererPort {
   private readonly width = 1080;
@@ -30,19 +37,19 @@ export class NodeCanvasDeckImageRendererAdapter implements DeckImageRendererPort
       x: 32,
       y: 318,
       width: 1016,
-      height: 560
+      height: 570
     });
     await this.drawDeckSection(context, "Extra Deck", DeckSection.EXTRA, input.cards, {
       x: 32,
-      y: 898,
+      y: 918,
       width: 1016,
-      height: 150
+      height: 122
     });
     await this.drawDeckSection(context, "Side Deck", DeckSection.SIDE, input.cards, {
       x: 32,
-      y: 1080,
+      y: 1077,
       width: 1016,
-      height: 150
+      height: 122
     });
     await this.drawFooter(context, input);
 
@@ -127,10 +134,7 @@ export class NodeCanvasDeckImageRendererAdapter implements DeckImageRendererPort
     context.strokeText(`${label} (${expandedCards.length})`, box.x, box.y - 12);
     context.fillText(`${label} (${expandedCards.length})`, box.x, box.y - 12);
 
-    const columns = section === DeckSection.MAIN ? 10 : 15;
-    const gap = section === DeckSection.MAIN ? 8 : 6;
-    const cardWidth = Math.floor((box.width - gap * (columns - 1)) / columns);
-    const cardHeight = Math.floor(cardWidth * 1.45);
+    const { columns, gap, cardWidth, cardHeight } = this.calculateGridLayout(section, expandedCards.length, box);
 
     for (let index = 0; index < expandedCards.length; index += 1) {
       const column = index % columns;
@@ -138,16 +142,56 @@ export class NodeCanvasDeckImageRendererAdapter implements DeckImageRendererPort
       const x = box.x + column * (cardWidth + gap);
       const y = box.y + row * (cardHeight + gap);
 
-      if (y + cardHeight > box.y + box.height) {
-        break;
-      }
-
       const image = await loadImage(expandedCards[index].imagePath);
       context.fillStyle = "rgba(255, 255, 255, 0.9)";
       this.roundRect(context, x - 3, y - 3, cardWidth + 6, cardHeight + 6, 5);
       context.fill();
       context.drawImage(image, x, y, cardWidth, cardHeight);
     }
+  }
+
+  private calculateGridLayout(section: DeckSection, cardCount: number, box: LayoutBox): CardGridLayout {
+    if (section !== DeckSection.MAIN) {
+      const columns = 15;
+      const gap = 6;
+      const cardWidth = Math.floor((box.width - gap * (columns - 1)) / columns);
+      return {
+        columns,
+        gap,
+        cardWidth,
+        cardHeight: Math.floor(cardWidth * 1.45)
+      };
+    }
+
+    const gap = 8;
+    const minimumColumns = 10;
+    const maximumColumns = 15;
+
+    for (let columns = minimumColumns; columns <= maximumColumns; columns += 1) {
+      const rows = Math.max(1, Math.ceil(cardCount / columns));
+      const cardWidth = Math.floor((box.width - gap * (columns - 1)) / columns);
+      const cardHeight = Math.floor(cardWidth * 1.45);
+      const requiredHeight = rows * cardHeight + Math.max(0, rows - 1) * gap;
+
+      if (requiredHeight <= box.height) {
+        return {
+          columns,
+          gap,
+          cardWidth,
+          cardHeight
+        };
+      }
+    }
+
+    const columns = maximumColumns;
+    const cardWidth = Math.floor((box.width - gap * (columns - 1)) / columns);
+
+    return {
+      columns,
+      gap,
+      cardWidth,
+      cardHeight: Math.floor(cardWidth * 1.45)
+    };
   }
 
   private async drawFooter(

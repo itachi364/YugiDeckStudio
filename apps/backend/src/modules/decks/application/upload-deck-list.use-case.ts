@@ -1,15 +1,21 @@
-import { BadRequestException, ConflictException, Injectable } from "@nestjs/common";
+import { BadRequestException, ConflictException, Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
   DeckStatus,
   ExtractionStatus,
   ImageAssetCategory,
   RetentionPolicy,
+  ResolutionStatus,
   ReviewStatus
 } from "@prisma/client";
 import { PrismaService } from "../../../infrastructure/prisma/prisma.service";
 import { LocalImageStorageService } from "../infrastructure/local-image-storage.service";
 import type { StoredImageFile } from "../infrastructure/local-image-storage.service";
+import {
+  ImportedNeuronDeck,
+  NEURON_DECK_IMPORT_PORT,
+  NeuronDeckImportPort
+} from "../ports/neuron-deck-import.port";
 
 export interface UploadDeckListFile {
   buffer: Buffer;
@@ -24,6 +30,7 @@ export interface UploadDeckListInput {
   tournamentDate: string;
   resultLabel: string;
   deckName: string;
+  neuronDeckUrl: string;
   tournamentName?: string;
   eventTypeId?: string;
   tournamentTypeId?: string;
@@ -39,6 +46,7 @@ export interface UploadDeckListResult {
   status: DeckStatus;
   extractionStatus: ExtractionStatus;
   reviewStatus: ReviewStatus;
+  importedCardCount: number;
 }
 
 @Injectable()
@@ -48,7 +56,8 @@ export class UploadDeckListUseCase {
   constructor(
     private readonly prisma: PrismaService,
     private readonly imageStorage: LocalImageStorageService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    @Inject(NEURON_DECK_IMPORT_PORT) private readonly neuronDeckImport: NeuronDeckImportPort
   ) {}
 
   async execute(input: UploadDeckListInput): Promise<UploadDeckListResult> {
@@ -68,10 +77,11 @@ export class UploadDeckListUseCase {
       throw new BadRequestException("La tienda indicada no existe.");
     }
 
+    const importedDeck = await this.neuronDeckImport.importDeck(input.neuronDeckUrl);
     const storedFile = await this.imageStorage.saveUploadedDeckList(input.file);
 
     try {
-      return await this.persistUpload(input, tournamentDate, storedFile);
+      return await this.persistUpload(input, tournamentDate, storedFile, importedDeck);
     } catch (error) {
       await this.imageStorage.remove(storedFile.storagePath);
       throw error;
@@ -115,7 +125,8 @@ export class UploadDeckListUseCase {
       ["playerName", input.playerName],
       ["tournamentDate", input.tournamentDate],
       ["resultLabel", input.resultLabel],
-      ["deckName", input.deckName]
+      ["deckName", input.deckName],
+      ["neuronDeckUrl", input.neuronDeckUrl]
     ];
 
     const missingFields = requiredFields.filter(([, value]) => typeof value !== "string" || value.trim().length === 0);
@@ -132,7 +143,8 @@ export class UploadDeckListUseCase {
   private async persistUpload(
     input: UploadDeckListInput,
     tournamentDate: Date,
-    storedFile: StoredImageFile
+    storedFile: StoredImageFile,
+    importedDeck: ImportedNeuronDeck
   ): Promise<UploadDeckListResult> {
     const deck = await this.prisma.$transaction(async (transaction) => {
       const imageAsset = await transaction.managedImageAsset.create({
@@ -165,7 +177,7 @@ export class UploadDeckListUseCase {
         }
       });
 
-      return transaction.deck.create({
+      const createdDeck = await transaction.deck.create({
         data: {
           playerId: player.id,
           tournamentId: tournament.id,
@@ -173,8 +185,9 @@ export class UploadDeckListUseCase {
           deckName: input.deckName.trim(),
           resultLabel: input.resultLabel.trim(),
           uploadedImageAssetId: imageAsset.id,
-          status: DeckStatus.UPLOADED,
-          extractionStatus: ExtractionStatus.PENDING,
+          neuronDeckUrl: importedDeck.sourceUrl,
+          status: DeckStatus.EXTRACTED,
+          extractionStatus: ExtractionStatus.EXTRACTED,
           reviewStatus: ReviewStatus.PENDING
         },
         select: {
@@ -187,6 +200,19 @@ export class UploadDeckListUseCase {
           reviewStatus: true
         }
       });
+
+      await transaction.deckCard.createMany({
+        data: importedDeck.cards.map((card) => ({
+          deckId: createdDeck.id,
+          section: card.section,
+          quantity: card.quantity,
+          originalName: card.originalName,
+          displayOrder: card.displayOrder,
+          resolutionStatus: ResolutionStatus.UNRESOLVED
+        }))
+      });
+
+      return createdDeck;
     });
 
     return {
@@ -196,7 +222,8 @@ export class UploadDeckListUseCase {
       uploadedImageAssetId: deck.uploadedImageAssetId,
       status: deck.status,
       extractionStatus: deck.extractionStatus,
-      reviewStatus: deck.reviewStatus
+      reviewStatus: deck.reviewStatus,
+      importedCardCount: importedDeck.cards.length
     };
   }
 

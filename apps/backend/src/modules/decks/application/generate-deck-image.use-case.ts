@@ -8,6 +8,7 @@ import {
   RenderableDeckCard,
   RenderableSocialLink
 } from "../ports/deck-image-renderer.port";
+import { DeckCompositionPolicyService } from "./deck-composition-policy.service";
 import { DeckReviewPolicyService } from "./deck-review-policy.service";
 
 interface AssetPath {
@@ -38,6 +39,7 @@ export class GenerateDeckImageUseCase {
     private readonly prisma: PrismaService,
     private readonly imageStorage: LocalImageStorageService,
     private readonly deckReviewPolicy: DeckReviewPolicyService,
+    private readonly deckCompositionPolicy: DeckCompositionPolicyService,
     @Inject(DECK_IMAGE_RENDERER_PORT) private readonly deckImageRenderer: DeckImageRendererPort
   ) {}
 
@@ -49,6 +51,8 @@ export class GenerateDeckImageUseCase {
     if (!deck) {
       throw new NotFoundException("El deck indicado no existe.");
     }
+
+    this.deckCompositionPolicy.assertValidCounts(deck.deckCards);
 
     const missingDependencies = this.findMissingDependencies(deck.deckCards);
 

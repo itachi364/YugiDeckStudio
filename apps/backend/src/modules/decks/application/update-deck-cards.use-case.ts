@@ -42,7 +42,7 @@ export class UpdateDeckCardsUseCase {
     }
 
     if (deck.extractionStatus !== ExtractionStatus.EXTRACTED) {
-      throw new BadRequestException("El deck debe tener OCR ejecutado antes de corregir cartas.");
+      throw new BadRequestException("El deck debe estar importado desde Neuron antes de corregir cartas.");
     }
 
     if (deck.reviewStatus === ReviewStatus.CONFIRMED) {

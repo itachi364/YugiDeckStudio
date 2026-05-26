@@ -1,6 +1,6 @@
-# YugiDeckStudio
+﻿# YugiDeckStudio
 
-YugiDeckStudio `v0.1.0` es una aplicacion web local para cargar deck lists de Yu-Gi-Oh!, extraer cartas por OCR, resolver nombres con YGOPRODeck, cachear imagenes de cartas y generar una imagen compartible del deck con branding de tienda.
+YugiDeckStudio `v0.1.0` es una aplicacion web local para cargar deck lists de Yu-Gi-Oh! como evidencia, importar la composicion desde un link publico de Yu-Gi-Oh! Neuron, revisar el deck, cachear imagenes de cartas con YGOPRODeck y generar una imagen compartible del deck con branding de tienda.
 
 Esta version es local-only. No incluye despliegue a internet, Hostinger, AWS ni acceso publico fuera del entorno Docker local.
 
@@ -8,13 +8,15 @@ Esta version es local-only. No incluye despliegue a internet, Hostinger, AWS ni 
 
 - Login local, registro de operadores y cambio obligatorio de contrasena para `root`.
 - Administracion de usuarios, roles y permisos con aislamiento multi-tienda.
-- Carga de deck list por imagen con metadatos de jugador, torneo, resultado y deck.
-- Extraccion OCR y revision/correccion manual antes de generar imagenes.
-- Resolucion de nombres de cartas y cache de metadatos desde YGOPRODeck.
+- Carga de deck list por imagen como evidencia con metadatos de jugador, torneo, resultado, deck y link Neuron obligatorio.
+- Importacion estructurada desde Yu-Gi-Oh! Neuron y revision/correccion manual de composicion antes de generar imagenes.
+- Listado de decks visibles en la ventana de carga, con aislamiento por tienda y vista global para `root`.
+- Cache de metadatos desde YGOPRODeck usando los nombres revisados.
 - Cache permanente de imagenes de cartas en volumen Docker local.
 - Configuracion de tienda, logos, fondo, tipos de eventos, tipos de torneos y redes sociales.
-- Generacion de imagen final `1080x1350` en PNG.
-- Previsualizacion y descarga local de la imagen generada.
+- Generacion de imagen final `1080x1350` en PNG desde la pantalla `Decks`.
+- Previsualizacion y descarga local de la imagen generada desde `Decks`, en modal desktop o vista mobile completa.
+- Sesion local restaurable despues de F5 con cierre automatico tras 20 minutos de inactividad.
 - Depuracion de imagenes temporales despues de 7 dias.
 
 ## Arquitectura
@@ -33,7 +35,6 @@ Esta version es local-only. No incluye despliegue a internet, Hostinger, AWS ni 
 - Frontend: React + Vite + TypeScript
 - Base de datos: PostgreSQL 16
 - ORM: Prisma
-- OCR: Tesseract OCR
 - Render de imagen: node-canvas
 - Pruebas backend: Jest
 - Pruebas frontend: Vitest + Testing Library
@@ -159,12 +160,26 @@ El primer login obliga a cambiar la contrasena antes de usar el resto de modulos
 1. Inicia sesion como `root` y cambia la contrasena temporal.
 2. Crea o configura el primer administrador de tienda.
 3. Configura tienda, logos, fondo, eventos, torneos y redes sociales.
-4. Carga una imagen de deck list.
-5. Ejecuta OCR y corrige las cartas si hace falta.
-6. Resuelve nombres de cartas.
-7. Cachea imagenes de cartas.
-8. Genera la imagen final.
-9. Previsualiza o descarga el PNG desde la pantalla `Imagen`.
+4. Carga una imagen de deck list e incluye el link publico de Neuron.
+5. Desde el resultado de carga o el listado de decks, abre `Revisar deck`.
+6. Revisa/corrige la composicion y confirma el deck.
+7. Desde la fila del deck confirmado en `Decks`, usa `Generar imagen`.
+8. En desktop, la revision y la generacion se abren en modales. En celular, se abren como vistas completas con accion `Volver`.
+9. La aplicacion cachea cartas, genera la imagen final y muestra la previsualizacion.
+10. Descarga el PNG desde el panel de resultado.
+
+## Sesion Local
+
+El frontend guarda la sesion autenticada en `localStorage` para que un refresco con F5 no obligue a iniciar sesion de nuevo.
+
+Reglas aplicadas:
+
+- La sesion se restaura si la ultima actividad fue hace menos de 20 minutos.
+- Click, teclado, scroll, touch y foco de ventana actualizan la actividad.
+- Despues de 20 minutos sin actividad, la aplicacion elimina el token local y vuelve al login.
+- Cerrar sesion en una pestana sincroniza el cierre con otras pestanas abiertas del mismo navegador.
+
+El timeout de inactividad es una proteccion de frontend local. La expiracion criptografica del JWT sigue dependiendo de la configuracion del backend.
 
 ## Imagenes y Retencion
 
@@ -231,9 +246,9 @@ Endpoints principales:
 - `POST /api/auth/register`
 - `GET /api/auth/users`
 - `POST /api/decks/uploads`
-- `POST /api/decks/{deckId}/extract`
+- `GET /api/decks`
+- `GET /api/decks/{deckId}/cards`
 - `PUT /api/decks/{deckId}/cards`
-- `POST /api/decks/{deckId}/resolve-card-names`
 - `POST /api/decks/{deckId}/cache-card-images`
 - `POST /api/decks/{deckId}/generate-image`
 - `POST /api/decks/{deckId}/inactivate`
@@ -247,7 +262,7 @@ Endpoints principales:
 
 ## Observabilidad
 
-El backend registra operaciones clave de OCR, YGOPRODeck, cache de imagenes, renderizado y depuracion. No se deben registrar secretos, contrasenas ni contenido de imagenes.
+El backend registra operaciones clave de importacion Neuron, YGOPRODeck, cache de imagenes, renderizado y depuracion. No se deben registrar secretos, contrasenas ni contenido de imagenes.
 
 ## Seguridad
 
@@ -256,7 +271,9 @@ El backend registra operaciones clave de OCR, YGOPRODeck, cache de imagenes, ren
 - Los usuarios no-root solo acceden a su tienda.
 - `root` es el unico rol con acceso global.
 - Las contrasenas se almacenan hasheadas.
+- La sesion persistida en navegador se limpia automaticamente despues de 20 minutos de inactividad.
 - Las imagenes subidas se validan por tipo MIME y tamano.
+- Los links de Neuron se restringen a dominios Konami permitidos para reducir riesgo SSRF.
 
 ## Terraform / Infraestructura
 
@@ -291,7 +308,7 @@ Imagen generada no se ve:
 
 Falla generacion por cache incompleta:
 
-- Ejecuta primero `Cachear cartas` desde la pantalla `Imagen`.
+- Usa `Generar imagen` desde la fila del deck en `Decks`; el flujo cachea cartas antes de generar.
 - Si no hay internet y faltan cartas o imagenes, la generacion se bloquea por diseno.
 
 Error `EACCES: permission denied, mkdir '/data/images/...'` al subir imagenes:

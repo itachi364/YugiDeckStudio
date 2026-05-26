@@ -14,6 +14,7 @@ describe("UploadDeckListUseCase", () => {
   const transaction = jest.fn();
   const saveUploadedDeckList = jest.fn();
   const removeStoredFile = jest.fn();
+  const importDeck = jest.fn();
 
   const useCase = new UploadDeckListUseCase(
     {
@@ -37,6 +38,9 @@ describe("UploadDeckListUseCase", () => {
 
         return values[key];
       })
+    } as never,
+    {
+      importDeck
     } as never
   );
 
@@ -46,6 +50,7 @@ describe("UploadDeckListUseCase", () => {
     tournamentDate: "2026-05-21",
     resultLabel: "Top 8",
     deckName: "White Forest",
+    neuronDeckUrl: "https://neuron.konami.net/link/6omm271xgfka1d95",
     tournamentName: "Regional",
     location: "Las Vegas",
     file: {
@@ -62,6 +67,23 @@ describe("UploadDeckListUseCase", () => {
     saveUploadedDeckList.mockResolvedValue({
       checksum: "checksum",
       storagePath: "uploaded-decklists/deck.png"
+    });
+    importDeck.mockResolvedValue({
+      sourceUrl: "https://www.db.yugioh-card.com/yugiohdb/member_deck.action?cgid=id&dno=14",
+      cards: [
+        {
+          section: "MAIN",
+          quantity: 3,
+          originalName: "Silvy of the White Forest",
+          displayOrder: 1
+        },
+        {
+          section: "EXTRA",
+          quantity: 1,
+          originalName: "Diabell, Queen of the White Forest",
+          displayOrder: 1
+        }
+      ]
     });
     removeStoredFile.mockResolvedValue(undefined);
     transaction.mockImplementation(async (callback) =>
@@ -81,10 +103,13 @@ describe("UploadDeckListUseCase", () => {
             playerId: "player-id",
             tournamentId: "tournament-id",
             uploadedImageAssetId: "asset-id",
-            status: DeckStatus.UPLOADED,
-            extractionStatus: ExtractionStatus.PENDING,
+            status: DeckStatus.EXTRACTED,
+            extractionStatus: ExtractionStatus.EXTRACTED,
             reviewStatus: ReviewStatus.PENDING
           })
+        },
+        deckCard: {
+          createMany: jest.fn().mockResolvedValue({ count: 2 })
         }
       })
     );
@@ -98,6 +123,18 @@ describe("UploadDeckListUseCase", () => {
       })
     ).rejects.toBeInstanceOf(BadRequestException);
 
+    expect(saveUploadedDeckList).not.toHaveBeenCalled();
+  });
+
+  it("rejects missing Neuron link before saving the image", async () => {
+    await expect(
+      useCase.execute({
+        ...validInput,
+        neuronDeckUrl: ""
+      })
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(importDeck).not.toHaveBeenCalled();
     expect(saveUploadedDeckList).not.toHaveBeenCalled();
   });
 
@@ -118,6 +155,7 @@ describe("UploadDeckListUseCase", () => {
   it("persists the uploaded deck list metadata and initial deck state", async () => {
     const result = await useCase.execute(validInput);
 
+    expect(importDeck).toHaveBeenCalledWith(validInput.neuronDeckUrl);
     expect(saveUploadedDeckList).toHaveBeenCalledWith(validInput.file);
     expect(transaction).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
@@ -125,9 +163,10 @@ describe("UploadDeckListUseCase", () => {
       playerId: "player-id",
       tournamentId: "tournament-id",
       uploadedImageAssetId: "asset-id",
-      status: DeckStatus.UPLOADED,
-      extractionStatus: ExtractionStatus.PENDING,
-      reviewStatus: ReviewStatus.PENDING
+      status: DeckStatus.EXTRACTED,
+      extractionStatus: ExtractionStatus.EXTRACTED,
+      reviewStatus: ReviewStatus.PENDING,
+      importedCardCount: 2
     });
   });
 
@@ -151,10 +190,13 @@ describe("UploadDeckListUseCase", () => {
             playerId: "player-id",
             tournamentId: "tournament-id",
             uploadedImageAssetId: "asset-id",
-            status: DeckStatus.UPLOADED,
-            extractionStatus: ExtractionStatus.PENDING,
+            status: DeckStatus.EXTRACTED,
+            extractionStatus: ExtractionStatus.EXTRACTED,
             reviewStatus: ReviewStatus.PENDING
           })
+        },
+        deckCard: {
+          createMany: jest.fn().mockResolvedValue({ count: 2 })
         }
       })
     );

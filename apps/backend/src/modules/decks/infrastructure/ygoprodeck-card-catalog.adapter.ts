@@ -93,9 +93,7 @@ export class YgoprodeckCardCatalogAdapter implements CardNameResolverPort {
   private buildCardInfoUrl(parameter: "name" | "fname", value: string): string {
     const baseUrl =
       this.configService.get<string>("YGOPRODECK_API_BASE_URL") ?? "https://db.ygoprodeck.com/api/v7";
-    const url = new URL(`${baseUrl.replace(/\/$/, "")}/cardinfo.php`);
-    url.searchParams.set(parameter, value);
-    return url.toString();
+    return `${baseUrl.replace(/\/$/, "")}/cardinfo.php?${parameter}=${encodeURIComponent(value)}`;
   }
 
   private async persistCard(card: YgoprodeckCardResponseItem): Promise<CardNameCandidate> {

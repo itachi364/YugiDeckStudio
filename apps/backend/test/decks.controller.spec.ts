@@ -6,14 +6,20 @@ describe("DecksController", () => {
   const uploadDeckListUseCase = {
     execute: jest.fn()
   };
+  const getDeckCardsUseCase = {
+    execute: jest.fn()
+  };
+  const listDecksUseCase = {
+    execute: jest.fn()
+  };
   const storeAccessPolicy = {
     assertCanAccessStore: jest.fn()
   };
 
   const controller = new DecksController(
     uploadDeckListUseCase as never,
-    {} as never,
-    {} as never,
+    listDecksUseCase as never,
+    getDeckCardsUseCase as never,
     {} as never,
     {} as never,
     {} as never,
@@ -36,7 +42,8 @@ describe("DecksController", () => {
     playerName: "Michael Vanegas",
     tournamentDate: "2026-04-26",
     resultLabel: "Top 4",
-    deckName: "White Forest"
+    deckName: "White Forest",
+    neuronDeckUrl: "https://neuron.konami.net/link/6omm271xgfka1d95"
   };
 
   const file = {
@@ -53,10 +60,12 @@ describe("DecksController", () => {
       playerId: "player-id",
       tournamentId: "tournament-id",
       uploadedImageAssetId: "asset-id",
-      status: DeckStatus.UPLOADED,
-      extractionStatus: ExtractionStatus.PENDING,
-      reviewStatus: ReviewStatus.PENDING
+      status: DeckStatus.EXTRACTED,
+      extractionStatus: ExtractionStatus.EXTRACTED,
+      reviewStatus: ReviewStatus.PENDING,
+      importedCardCount: 42
     });
+    listDecksUseCase.execute.mockResolvedValue([]);
   });
 
   it("validates store scope after multipart body is available", async () => {
@@ -74,5 +83,11 @@ describe("DecksController", () => {
 
     expect(storeAccessPolicy.assertCanAccessStore).not.toHaveBeenCalled();
     expect(uploadDeckListUseCase.execute).not.toHaveBeenCalled();
+  });
+
+  it("lists decks visible to the current user", async () => {
+    await controller.listDecks(user);
+
+    expect(listDecksUseCase.execute).toHaveBeenCalledWith(user);
   });
 });

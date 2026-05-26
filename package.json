@@ -2,7 +2,7 @@
   "name": "yugideckstudio",
   "version": "0.1.0",
   "private": true,
-  "description": "Local-first Yu-Gi-Oh! deck image generator using OCR, YGOPRODeck, Docker and PostgreSQL.",
+  "description": "Local-first Yu-Gi-Oh! deck image generator using Neuron links, YGOPRODeck, Docker and PostgreSQL.",
   "workspaces": [
     "apps/backend",
     "apps/frontend",

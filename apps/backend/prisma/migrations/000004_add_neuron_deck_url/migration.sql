@@ -1,0 +1,2 @@
+ALTER TABLE "Deck" ADD COLUMN "neuronDeckUrl" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "Deck" DROP COLUMN "rawOcrText";

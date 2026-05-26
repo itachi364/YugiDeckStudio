@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { DeckStatus, ExtractionStatus, ReviewStatus } from "@prisma/client";
 import { PrismaService } from "../../../infrastructure/prisma/prisma.service";
+import { DeckCompositionPolicyService } from "./deck-composition-policy.service";
 
 export interface ConfirmDeckReviewResult {
   deckId: string;
@@ -11,7 +12,10 @@ export interface ConfirmDeckReviewResult {
 
 @Injectable()
 export class ConfirmDeckReviewUseCase {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly deckCompositionPolicy: DeckCompositionPolicyService
+  ) {}
 
   async execute(deckId: string): Promise<ConfirmDeckReviewResult> {
     const deck = await this.prisma.deck.findUnique({
@@ -24,7 +28,10 @@ export class ConfirmDeckReviewUseCase {
         reviewStatus: true,
         deckCards: {
           select: {
-            id: true
+            id: true,
+            section: true,
+            quantity: true,
+            originalName: true
           }
         }
       }
@@ -35,16 +42,18 @@ export class ConfirmDeckReviewUseCase {
     }
 
     if (deck.extractionStatus !== ExtractionStatus.EXTRACTED) {
-      throw new BadRequestException("El deck debe tener OCR ejecutado antes de confirmar revisión.");
+      throw new BadRequestException("El deck debe estar importado desde Neuron antes de confirmar revisión.");
     }
 
     if (deck.deckCards.length === 0) {
-      throw new BadRequestException("El deck debe tener cartas extraídas o corregidas antes de confirmar revisión.");
+      throw new BadRequestException("El deck debe tener cartas importadas o corregidas antes de confirmar revisión.");
     }
 
     if (deck.reviewStatus === ReviewStatus.CONFIRMED) {
       throw new ConflictException("La revisión del deck ya fue confirmada.");
     }
+
+    this.deckCompositionPolicy.assertValidCounts(deck.deckCards);
 
     const updatedDeck = await this.prisma.deck.update({
       where: {
@@ -61,11 +70,13 @@ export class ConfirmDeckReviewUseCase {
       }
     });
 
+    const totals = this.deckCompositionPolicy.calculateTotals(deck.deckCards);
+
     return {
       deckId: updatedDeck.id,
       status: updatedDeck.status,
       reviewStatus: updatedDeck.reviewStatus,
-      cardCount: deck.deckCards.length
+      cardCount: totals.main + totals.extra + totals.side
     };
   }
 }

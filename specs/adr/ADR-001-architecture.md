@@ -1,4 +1,4 @@
-# ADR-001: Usar Clean/Hexagonal Architecture con Docker y PostgreSQL
+﻿# ADR-001: Usar Clean/Hexagonal Architecture con Docker y PostgreSQL
 
 ## Estado
 
@@ -6,7 +6,7 @@ Propuesto
 
 ## Contexto
 
-YugiDeckStudio necesita integrarse con OCR, YGOPRODeck, almacenamiento de imágenes, renderizado de imágenes y persistencia en PostgreSQL.
+YugiDeckStudio necesita integrarse con Yu-Gi-Oh! Neuron/Konami, YGOPRODeck, almacenamiento de imágenes, renderizado de imágenes y persistencia en PostgreSQL.
 
 El proyecto también necesita frontend y backend que puedan evolucionar de forma independiente, manteniendo los flujos de negocio testeables.
 
@@ -21,7 +21,7 @@ Usar:
 
 Las dependencias externas se implementarán como adaptadores detrás de puertos:
 
-- OCR.
+- Yu-Gi-Oh! Neuron/Konami.
 - YGOPRODeck.
 - Almacenamiento de archivos/imágenes.
 - Renderizado de imágenes.
@@ -47,7 +47,6 @@ Positivas:
 
 - Los flujos de negocio se mantienen testeables.
 - Los sistemas externos se pueden mockear en pruebas unitarias.
-- Los proveedores de OCR y renderizado de imágenes se pueden reemplazar más adelante.
 - La persistencia PostgreSQL queda aislada de la lógica de dominio.
 
 Negativas:

@@ -1,9 +1,12 @@
-import { FormEvent, useState } from "react";
-import { AlertCircle, CheckCircle2, ListChecks, RefreshCw, Save, SearchCheck, ShieldCheck } from "lucide-react";
-import { deckApi, EditableDeckCard, ExtractDeckResponse, ResolveCardNamesResponse } from "./deck-api";
+import { FormEvent, useEffect, useState } from "react";
+import { AlertCircle, ArrowLeft, CheckCircle2, ListChecks, Plus, RefreshCw, Save, ShieldCheck, Trash2 } from "lucide-react";
+import { deckApi, EditableDeckCard, ExtractDeckResponse } from "./deck-api";
 
 type DeckReviewWorkspaceProps = {
   accessToken: string;
+  deckId: string;
+  onBack?: () => void;
+  onDeckChanged?: (deckId: string, status: string, reviewStatus: string) => void;
 };
 
 type Feedback = {
@@ -13,26 +16,20 @@ type Feedback = {
 
 const deckSections: EditableDeckCard["section"][] = ["MAIN", "EXTRA", "SIDE"];
 
-export function DeckReviewWorkspace({ accessToken }: DeckReviewWorkspaceProps) {
-  const [deckId, setDeckId] = useState("");
+export function DeckReviewWorkspace({ accessToken, deckId, onBack, onDeckChanged }: DeckReviewWorkspaceProps) {
   const [cards, setCards] = useState<EditableDeckCard[]>([]);
-  const [rawOcrText, setRawOcrText] = useState("");
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [isWorking, setIsWorking] = useState(false);
-  const [resolution, setResolution] = useState<ResolveCardNamesResponse | null>(null);
   const [reviewStatus, setReviewStatus] = useState<string | null>(null);
+  const [hasUnsavedCorrections, setHasUnsavedCorrections] = useState(false);
 
-  const normalizedDeckId = deckId.trim();
+  const deckTotals = calculateDeckTotals(cards);
+  const deckCompositionMessages = getDeckCompositionMessages(deckTotals);
+  const isDeckCompositionValid = deckCompositionMessages.length === 0;
+  const isReviewConfirmed = reviewStatus === "CONFIRMED";
+  const canConfirm = cards.length > 0 && !hasUnsavedCorrections && isDeckCompositionValid && !isReviewConfirmed;
 
   const runDeckAction = async (action: () => Promise<void>) => {
-    if (!normalizedDeckId) {
-      setFeedback({
-        tone: "error",
-        message: "El Deck ID es obligatorio para revisar la extraccion."
-      });
-      return;
-    }
-
     setIsWorking(true);
     setFeedback(null);
 
@@ -48,55 +45,65 @@ export function DeckReviewWorkspace({ accessToken }: DeckReviewWorkspaceProps) {
     }
   };
 
-  const handleExtract = () =>
+  const loadImportedCards = () =>
     runDeckAction(async () => {
-      const result = await deckApi.extractDeckList(accessToken, normalizedDeckId);
+      const result = await deckApi.getDeckCards(accessToken, deckId);
       loadExtraction(result);
-      setResolution(null);
       setFeedback({
         tone: "success",
-        message: `Extraccion ${result.extractionStatus} con ${result.cards.length} cartas.`
+        message: `Deck cargado para revision con ${result.cards.length} registros.`
       });
     });
+
+  useEffect(() => {
+    void loadImportedCards();
+  }, [accessToken, deckId]);
 
   const handleSaveCorrections = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     runDeckAction(async () => {
-      const result = await deckApi.updateDeckCards(accessToken, normalizedDeckId, normalizeCards(cards));
+      const result = await deckApi.updateDeckCards(accessToken, deckId, normalizeCards(cards));
       loadExtraction(result);
-      setResolution(null);
       setFeedback({
         tone: "success",
-        message: "Correcciones guardadas."
+        message: "Revision del deck guardada."
       });
     });
   };
 
-  const handleResolve = () =>
-    runDeckAction(async () => {
-      const result = await deckApi.resolveCardNames(accessToken, normalizedDeckId);
-      setResolution(result);
-      setFeedback({
-        tone: result.unresolved > 0 || result.ambiguous > 0 ? "error" : "success",
-        message: `Resolucion: ${result.resolved} resueltas, ${result.ambiguous} ambiguas, ${result.unresolved} no resueltas.`
-      });
-    });
-
   const handleConfirm = () =>
     runDeckAction(async () => {
-      const result = await deckApi.confirmDeckReview(accessToken, normalizedDeckId);
+      if (!canConfirm) {
+        setFeedback({
+          tone: "error",
+          message: hasUnsavedCorrections
+            ? "Guarda los cambios antes de confirmar el deck."
+            : "Completa la composicion del deck antes de confirmar."
+        });
+        return;
+      }
+
+      const result = await deckApi.confirmDeckReview(accessToken, deckId);
       setReviewStatus(result.reviewStatus);
+      onDeckChanged?.(deckId, result.status, result.reviewStatus);
       setFeedback({
         tone: "success",
-        message: `Revision confirmada con ${result.cardCount} cartas.`
+        message: `Deck confirmado con ${result.cardCount} cartas.`
       });
     });
 
   const loadExtraction = (result: ExtractDeckResponse) => {
     setCards(result.cards);
-    setRawOcrText(result.rawOcrText);
-    setReviewStatus(null);
+    setReviewStatus(result.reviewStatus);
+    setHasUnsavedCorrections(false);
+  };
+
+  const markCorrectionsAsChanged = () => {
+    setHasUnsavedCorrections(true);
+    if (reviewStatus !== "CONFIRMED") {
+      setReviewStatus("PENDING");
+    }
   };
 
   const updateCard = (index: number, field: keyof EditableDeckCard, value: string) => {
@@ -119,16 +126,64 @@ export function DeckReviewWorkspace({ accessToken }: DeckReviewWorkspaceProps) {
         };
       })
     );
+    markCorrectionsAsChanged();
+  };
+
+  const removeCard = (index: number) => {
+    setCards((currentCards) =>
+      currentCards
+        .filter((_, cardIndex) => cardIndex !== index)
+        .map((card, cardIndex) => ({
+          ...card,
+          displayOrder: cardIndex + 1
+        }))
+    );
+    markCorrectionsAsChanged();
+  };
+
+  const addCard = () => {
+    setCards((currentCards) => [
+      ...currentCards,
+      {
+        section: "MAIN",
+        quantity: 1,
+        originalName: "",
+        displayOrder: currentCards.length + 1
+      }
+    ]);
+    markCorrectionsAsChanged();
   };
 
   return (
     <div className="deck-review-layout">
       <div className="section-header">
         <div>
-          <p className="eyebrow">Revision OCR</p>
-          <h3>Revisar extraccion</h3>
+          <p className="eyebrow">Revision de deck</p>
+          <h3>Revisar composicion</h3>
+        </div>
+        <div className="inline-actions">
+          {onBack ? (
+            <button className="secondary-button" type="button" onClick={onBack}>
+              <ArrowLeft size={18} aria-hidden="true" />
+              <span>Volver</span>
+            </button>
+          ) : null}
+          <button className="secondary-button" disabled={isWorking} type="button" onClick={loadImportedCards}>
+            <RefreshCw size={18} aria-hidden="true" />
+            <span>{isWorking ? "Procesando" : "Recargar"}</span>
+          </button>
         </div>
       </div>
+
+      <section className="data-panel" aria-label="Deck seleccionado">
+        <div className="table-row">
+          <div>
+            <strong>{deckId}</strong>
+            <span>Deck ID</span>
+          </div>
+          <span>{reviewStatus ?? "PENDING"}</span>
+        </div>
+      </section>
 
       {feedback ? (
         <div className={`feedback ${feedback.tone}`} role="status">
@@ -137,124 +192,112 @@ export function DeckReviewWorkspace({ accessToken }: DeckReviewWorkspaceProps) {
         </div>
       ) : null}
 
-      <section className="data-panel" aria-label="Seleccion de deck">
-        <div className="review-actions">
-          <label>
-            Deck ID
-            <input
-              name="deckId"
-              placeholder="uuid del deck cargado"
-              required
-              type="text"
-              value={deckId}
-              onChange={(event) => setDeckId(event.currentTarget.value)}
-            />
-          </label>
-          <button className="secondary-button" disabled={isWorking} type="button" onClick={handleExtract}>
-            <RefreshCw size={18} aria-hidden="true" />
-            <span>{isWorking ? "Procesando" : "Ejecutar OCR"}</span>
-          </button>
-        </div>
-      </section>
-
-      {rawOcrText ? (
-        <section className="data-panel" aria-label="Texto OCR original">
-          <h4>Texto OCR original</h4>
-          <pre className="ocr-text">{rawOcrText}</pre>
-        </section>
-      ) : null}
-
-      <form className="data-panel" aria-label="Correccion de cartas" onSubmit={handleSaveCorrections}>
+      <form className="data-panel" aria-label="Revision de cartas" onSubmit={handleSaveCorrections}>
         <div className="section-header">
-          <h4>Cartas extraidas</h4>
-          <button className="secondary-button" disabled={isWorking || cards.length === 0} type="submit">
-            <Save size={18} aria-hidden="true" />
-            <span>Guardar correcciones</span>
-          </button>
+          <h4>Cartas del deck</h4>
+          <div className="inline-actions">
+            <button className="secondary-button" disabled={isWorking || isReviewConfirmed} type="button" onClick={addCard}>
+              <Plus size={18} aria-hidden="true" />
+              <span>Agregar carta</span>
+            </button>
+            <button className="secondary-button" disabled={isWorking || cards.length === 0 || !hasUnsavedCorrections} type="submit">
+              <Save size={18} aria-hidden="true" />
+              <span>Guardar revision</span>
+            </button>
+          </div>
         </div>
 
         {cards.length > 0 ? (
-          <div className="card-edit-list">
-            {cards.map((card, index) => (
-              <article className="card-edit-row" key={`${card.displayOrder}-${index}`}>
-                <label>
-                  Seccion
-                  <select value={card.section} onChange={(event) => updateCard(index, "section", event.currentTarget.value)}>
-                    {deckSections.map((section) => (
-                      <option key={section} value={section}>
-                        {section}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Cantidad
-                  <input
-                    min={1}
-                    required
-                    type="number"
-                    value={card.quantity}
-                    onChange={(event) => updateCard(index, "quantity", event.currentTarget.value)}
-                  />
-                </label>
-                <label>
-                  Nombre original
-                  <input
-                    required
-                    type="text"
-                    value={card.originalName}
-                    onChange={(event) => updateCard(index, "originalName", event.currentTarget.value)}
-                  />
-                </label>
-                <label>
-                  Orden
-                  <input
-                    min={1}
-                    required
-                    type="number"
-                    value={card.displayOrder}
-                    onChange={(event) => updateCard(index, "displayOrder", event.currentTarget.value)}
-                  />
-                </label>
-              </article>
-            ))}
-          </div>
+          <>
+            <DeckCompositionSummary totals={deckTotals} messages={deckCompositionMessages} />
+            <div className="card-edit-list">
+              {cards.map((card, index) => (
+                <article className="card-edit-row" key={`${card.displayOrder}-${index}`}>
+                  <label>
+                    Seccion
+                    <select
+                      disabled={isReviewConfirmed}
+                      value={card.section}
+                      onChange={(event) => updateCard(index, "section", event.currentTarget.value)}
+                    >
+                      {deckSections.map((section) => (
+                        <option key={section} value={section}>
+                          {section}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Cantidad
+                    <input
+                      min={1}
+                      disabled={isReviewConfirmed}
+                      required
+                      type="number"
+                      value={card.quantity}
+                      onChange={(event) => updateCard(index, "quantity", event.currentTarget.value)}
+                    />
+                  </label>
+                  <label>
+                    Nombre
+                    <input
+                      required
+                      disabled={isReviewConfirmed}
+                      type="text"
+                      value={card.originalName}
+                      onChange={(event) => updateCard(index, "originalName", event.currentTarget.value)}
+                    />
+                  </label>
+                  <label>
+                    Orden
+                    <input
+                      min={1}
+                      disabled={isReviewConfirmed}
+                      required
+                      type="number"
+                      value={card.displayOrder}
+                      onChange={(event) => updateCard(index, "displayOrder", event.currentTarget.value)}
+                    />
+                  </label>
+                  <button
+                    aria-label={`Eliminar ${card.originalName || "carta sin nombre"}`}
+                    className="danger-button"
+                    disabled={isWorking || isReviewConfirmed}
+                    type="button"
+                    onClick={() => removeCard(index)}
+                  >
+                    <Trash2 size={18} aria-hidden="true" />
+                    <span>Eliminar</span>
+                  </button>
+                </article>
+              ))}
+            </div>
+          </>
         ) : (
-          <p className="empty-state">Ejecuta OCR para cargar cartas extraidas.</p>
+          <p className="empty-state">No hay cartas cargadas para este deck.</p>
         )}
       </form>
 
-      <section className="data-panel" aria-label="Resolucion y confirmacion">
+      <section className="data-panel" aria-label="Confirmacion de deck">
         <div className="review-footer-actions">
-          <button className="secondary-button" disabled={isWorking || cards.length === 0} type="button" onClick={handleResolve}>
-            <SearchCheck size={18} aria-hidden="true" />
-            <span>Resolver nombres</span>
-          </button>
-          <button className="primary-button" disabled={isWorking || cards.length === 0} type="button" onClick={handleConfirm}>
+          <button className="primary-button" disabled={isWorking || !canConfirm} type="button" onClick={handleConfirm}>
             <CheckCircle2 size={18} aria-hidden="true" />
-            <span>Confirmar revision</span>
+            <span>Confirmar deck</span>
           </button>
         </div>
 
-        {resolution ? (
-          <div className="resolution-summary">
-            <Metric label="Resueltas" value={resolution.resolved} />
-            <Metric label="Ambiguas" value={resolution.ambiguous} />
-            <Metric label="No resueltas" value={resolution.unresolved} />
-          </div>
+        {hasUnsavedCorrections && cards.length > 0 ? (
+          <p className="empty-state">Guarda los cambios antes de confirmar el deck.</p>
         ) : null}
 
-        {resolution ? (
-          <div className="table-list" aria-label="Resultado de resolucion">
-            {resolution.cards.map((card) => (
-              <article className="table-row" key={card.deckCardId}>
-                <div>
-                  <strong>{card.originalName}</strong>
-                  <span>{card.resolvedEnglishName || "Sin nombre resuelto"}</span>
-                </div>
-                <span>{card.resolutionStatus}</span>
-                <span>{card.cardId || "Sin carta vinculada"}</span>
-              </article>
+        {isReviewConfirmed ? (
+          <p className="empty-state">La revision del deck ya fue confirmada.</p>
+        ) : null}
+
+        {!isDeckCompositionValid && cards.length > 0 ? (
+          <div className="validation-list" role="status">
+            {deckCompositionMessages.map((message) => (
+              <span key={message}>{message}</span>
             ))}
           </div>
         ) : null}
@@ -279,6 +322,27 @@ function Metric({ label, value }: { label: string; value: number }) {
   );
 }
 
+function DeckCompositionSummary({
+  totals,
+  messages
+}: {
+  totals: ReturnType<typeof calculateDeckTotals>;
+  messages: string[];
+}) {
+  return (
+    <div className="deck-count-panel">
+      <Metric label="Main Deck" value={totals.MAIN} />
+      <Metric label="Extra Deck" value={totals.EXTRA} />
+      <Metric label="Side Deck" value={totals.SIDE} />
+      {messages.length === 0 ? (
+        <span className="valid-count-message">Composicion valida para confirmar.</span>
+      ) : (
+        <span className="invalid-count-message">Completa la lista antes de confirmar.</span>
+      )}
+    </div>
+  );
+}
+
 function normalizeCards(cards: EditableDeckCard[]) {
   return cards.map((card, index) => ({
     ...card,
@@ -286,4 +350,36 @@ function normalizeCards(cards: EditableDeckCard[]) {
     displayOrder: Math.max(1, Number(card.displayOrder) || index + 1),
     originalName: card.originalName.trim()
   }));
+}
+
+function calculateDeckTotals(cards: EditableDeckCard[]) {
+  return cards.reduce<Record<EditableDeckCard["section"], number>>(
+    (totals, card) => ({
+      ...totals,
+      [card.section]: totals[card.section] + Math.max(1, Number(card.quantity) || 1)
+    }),
+    {
+      MAIN: 0,
+      EXTRA: 0,
+      SIDE: 0
+    }
+  );
+}
+
+function getDeckCompositionMessages(totals: Record<EditableDeckCard["section"], number>) {
+  const messages: string[] = [];
+
+  if (totals.MAIN < 40 || totals.MAIN > 60) {
+    messages.push("Main Deck debe tener entre 40 y 60 cartas.");
+  }
+
+  if (totals.EXTRA > 15) {
+    messages.push("Extra Deck no puede tener mas de 15 cartas.");
+  }
+
+  if (totals.SIDE > 15) {
+    messages.push("Side Deck no puede tener mas de 15 cartas.");
+  }
+
+  return messages;
 }

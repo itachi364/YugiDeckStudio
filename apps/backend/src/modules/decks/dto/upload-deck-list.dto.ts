@@ -22,6 +22,10 @@ export class UploadDeckListDto {
   @MinLength(1)
   deckName!: string;
 
+  @IsString()
+  @MinLength(1)
+  neuronDeckUrl!: string;
+
   @IsOptional()
   @Transform(emptyStringToUndefined)
   @IsString()

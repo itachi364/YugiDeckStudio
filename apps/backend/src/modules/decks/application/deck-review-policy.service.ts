@@ -19,7 +19,7 @@ export class DeckReviewPolicyService {
     }
 
     if (deck.reviewStatus !== ReviewStatus.CONFIRMED) {
-      throw new ConflictException("Debe confirmar la revisión OCR antes de generar la imagen del deck.");
+      throw new ConflictException("Debe confirmar la revisión de la importación Neuron antes de generar la imagen del deck.");
     }
   }
 }

@@ -1,4 +1,4 @@
-# YugiDeckStudio v0.1.0 - Contrato API
+﻿# YugiDeckStudio v0.1.0 - Contrato API
 
 ## 1. Convenciones
 
@@ -16,7 +16,7 @@
 
 ### `POST /api/decks/uploads`
 
-Carga una imagen de deck list y registra los metadatos iniciales del deck.
+Carga una imagen de deck list como evidencia, exige un link publico de Yu-Gi-Oh! Neuron e importa la composicion inicial del deck desde Konami.
 
 Content type:
 
@@ -37,6 +37,7 @@ Campos obligatorios:
 | Campo | Tipo | Reglas |
 | --- | --- | --- |
 | `storeId` | string | Debe existir en base de datos. |
+| `neuronDeckUrl` | string | Link publico de Neuron o Konami DB. |
 | `playerName` | string | No vacío. |
 | `tournamentDate` | string | Fecha ISO válida. |
 | `resultLabel` | string | No vacío. Ejemplos: `Top 8`, `Ganador`. |
@@ -59,8 +60,8 @@ Respuesta exitosa `201 Created`:
   "playerId": "uuid",
   "tournamentId": "uuid",
   "uploadedImageAssetId": "uuid",
-  "status": "UPLOADED",
-  "extractionStatus": "PENDING",
+  "status": "EXTRACTED",
+  "extractionStatus": "EXTRACTED",
   "reviewStatus": "PENDING"
 }
 ```
@@ -70,21 +71,50 @@ Reglas:
 - Debe almacenar físicamente la imagen en el volumen local configurado por `IMAGE_STORAGE_PATH`.
 - Debe persistir el asset como `UPLOADED_DECKLIST`.
 - Debe usar política `TEMPORARY_CLEANUP_ALLOWED`.
-- Debe persistir `Player`, `Tournament` y `Deck`.
-- No debe existir un endpoint de reemplazo de imagen para el mismo deck.
+- Debe persistir `Player`, `Tournament`, `Deck` y `DeckCard` importadas desde Neuron.
+- No debe existir un endpoint de reemplazo de imagen ni de link Neuron para el mismo deck.
 - Si un caso de uso intenta cargar una nueva imagen para un deck que ya tiene `uploadedImageAssetId`, debe rechazarse con `409 Conflict`.
+- Debe rechazar links que no pertenezcan a `neuron.konami.net` o `www.db.yugioh-card.com`.
+- Debe seguir redirecciones validas desde Neuron y parsear Main Deck, Extra Deck y Side Deck desde HTML estructurado.
+- Si Neuron no responde o el HTML no contiene cartas parseables, debe rechazar la carga sin crear decks incompletos.
 
-## 3. Extraer deck list por OCR
+## 3. Consultar cartas importadas
 
-### `POST /api/decks/{deckId}/extract`
+### `GET /api/decks`
 
-Ejecuta OCR sobre la imagen de deck list subida y persiste las cartas extraidas por seccion.
+Lista decks visibles para la pantalla `Decks`.
 
-Parametros de ruta:
+Respuesta exitosa `200 OK`:
 
-| Campo | Tipo | Reglas |
-| --- | --- | --- |
-| `deckId` | string | Debe existir en base de datos. |
+```json
+[
+  {
+    "deckId": "uuid",
+    "storeId": "uuid",
+    "storeName": "Ready For Duel",
+    "playerName": "Michael Vanegas",
+    "deckName": "White Forest",
+    "resultLabel": "Top 4",
+    "tournamentDate": "2026-05-21T00:00:00.000Z",
+    "status": "EXTRACTED",
+    "extractionStatus": "EXTRACTED",
+    "reviewStatus": "PENDING",
+    "cardCount": 42,
+    "createdAt": "2026-05-26T00:00:00.000Z"
+  }
+]
+```
+
+Reglas:
+
+- Requiere token valido.
+- `root` recibe decks de todas las tiendas.
+- Usuarios no-root reciben solo decks de su tienda vinculada.
+- No devuelve decks inactivos.
+
+### `GET /api/decks/{deckId}/cards`
+
+Devuelve las cartas importadas desde Neuron para revision y correccion manual.
 
 Respuesta exitosa `200 OK`:
 
@@ -93,12 +123,13 @@ Respuesta exitosa `200 OK`:
   "deckId": "uuid",
   "status": "EXTRACTED",
   "extractionStatus": "EXTRACTED",
-  "rawOcrText": "texto original del OCR",
+  "reviewStatus": "PENDING",
+  "source": "NEURON",
   "cards": [
     {
       "section": "MAIN",
       "quantity": 3,
-      "originalName": "Silvy del Bosque Blanco",
+      "originalName": "Silvy of the White Forest",
       "displayOrder": 1
     }
   ]
@@ -107,18 +138,16 @@ Respuesta exitosa `200 OK`:
 
 Reglas:
 
-- Debe leer la imagen desde el asset `UPLOADED_DECKLIST` asociado al deck.
-- Debe conservar el texto original del OCR en `rawOcrText`.
-- Debe detectar cartas de `MAIN`, `EXTRA` y `SIDE`.
-- Debe persistir cantidad, nombre original, seccion y orden visual.
-- Si el deck ya tiene cartas extraidas, debe rechazar la operacion con `409 Conflict`.
-- Si no se detecta ninguna carta, debe marcar la extraccion como `FAILED` y devolver `400 Bad Request`.
+- Requiere token valido y acceso a la tienda del deck.
+- No ejecuta OCR ni consulta la imagen subida.
+- Devuelve la lista actualmente persistida para el deck.
+- Devuelve `reviewStatus` persistido para que el frontend no asuma `PENDING` cuando el deck ya fue confirmado.
 
-## 4. Corregir cartas extraidas
+## 4. Corregir cartas importadas
 
 ### `PUT /api/decks/{deckId}/cards`
 
-Reemplaza las cartas extraidas por OCR con la version corregida por el usuario antes de confirmar la revision.
+Reemplaza las cartas importadas desde Neuron con la version revisada por el usuario antes de confirmar el deck.
 
 Parametros de ruta:
 
@@ -143,16 +172,16 @@ Body:
 
 Reglas:
 
-- Solo se permite si el OCR fue ejecutado.
+- Solo se permite si el deck fue importado desde Neuron.
 - Solo se permite mientras `reviewStatus` sea `PENDING`.
 - Debe reemplazar la lista completa de cartas del deck.
-- Las cartas corregidas quedan en `ResolutionStatus.UNRESOLVED` hasta la resolucion de nombres.
+- Las cartas revisadas se usan como fuente para consultar YGOPRODeck durante el cacheo de imagenes.
 
-## 5. Confirmar revision OCR
+## 5. Confirmar revision de importacion
 
 ### `POST /api/decks/{deckId}/review/confirm`
 
-Confirma que el usuario reviso y corrigio las cartas extraidas.
+Confirma que el usuario reviso la composicion del deck importado.
 
 Respuesta exitosa `200 OK`:
 
@@ -167,53 +196,17 @@ Respuesta exitosa `200 OK`:
 
 Reglas:
 
-- Solo se permite si el OCR fue ejecutado.
+- Solo se permite si el deck fue importado desde Neuron.
 - El deck debe tener al menos una carta extraida o corregida.
+- La composicion debe ser valida: Main Deck entre 40 y 60 cartas, Extra Deck maximo 15 y Side Deck maximo 15.
 - Al confirmar, `reviewStatus` cambia a `CONFIRMED` y `status` cambia a `REVIEWED`.
 - La generacion de imagen debe bloquearse cuando `reviewStatus` no sea `CONFIRMED`.
 
-## 6. Resolver nombres de cartas
-
-### `POST /api/decks/{deckId}/resolve-card-names`
-
-Intenta resolver las cartas extraidas o corregidas contra los nombres oficiales en ingles disponibles en el cache local de cartas. Si no hay coincidencia local, consulta YGOPRODeck con busqueda exacta `name` y luego busqueda difusa `fname`.
-
-Respuesta exitosa `200 OK`:
-
-```json
-{
-  "deckId": "uuid",
-  "resolved": 1,
-  "ambiguous": 1,
-  "unresolved": 1,
-  "cards": [
-    {
-      "deckCardId": "uuid",
-      "originalName": "Blue Eyes White Dragon",
-      "resolutionStatus": "RESOLVED",
-      "resolvedEnglishName": "Blue-Eyes White Dragon",
-      "cardId": "uuid"
-    }
-  ]
-}
-```
-
-Reglas:
-
-- Debe normalizar espacios, acentos, puntuacion y mayusculas/minusculas.
-- Debe consultar cache local antes de llamar a YGOPRODeck.
-- Si existe una unica coincidencia, la carta queda `RESOLVED`.
-- Si existen varias coincidencias posibles, la carta queda `AMBIGUOUS`.
-- Si no existe coincidencia local ni remota, la carta queda `UNRESOLVED`.
-- No debe reemplazar silenciosamente cartas ambiguas.
-- La informacion devuelta por YGOPRODeck debe persistirse en `Card` para usos posteriores.
-- Si no hay conexion a YGOPRODeck y no existe cache local, la carta queda `UNRESOLVED`.
-
-## 7. Cachear imagenes de cartas
+## 6. Cachear imagenes de cartas
 
 ### `POST /api/decks/{deckId}/cache-card-images`
 
-Descarga y almacena de forma permanente las imagenes de las cartas resueltas del deck.
+Descarga y almacena de forma permanente las imagenes de las cartas del deck confirmado o revisado, usando los nombres revisados para consultar YGOPRODeck cuando la carta aun no esta vinculada al cache local.
 
 Respuesta exitosa `200 OK`:
 
@@ -235,7 +228,8 @@ Respuesta exitosa `200 OK`:
 
 Reglas:
 
-- Debe trabajar solo con cartas resueltas y vinculadas a `Card`.
+- Debe usar los nombres revisados del deck para buscar cartas en cache local o YGOPRODeck.
+- Si una carta no existe en cache y YGOPRODeck no devuelve una coincidencia unica, debe reportarla en `missing`.
 - Si una carta ya tiene un asset activo asociado, no debe volver a descargar la imagen.
 - Si falta `imageUrlSource` o falla la descarga, debe reportar la carta en `missing`.
 - Las imagenes descargadas se almacenan en el volumen local configurado por `IMAGE_STORAGE_PATH`.
@@ -243,11 +237,11 @@ Reglas:
 - Las imagenes de cartas deben usar politica `PERMANENT`.
 - La depuracion semanal no debe eliminar imagenes de cartas.
 
-## 8. Generar imagen del deck
+## 7. Generar imagen del deck
 
 ### `POST /api/decks/{deckId}/generate-image`
 
-Genera la imagen final del deck usando cartas resueltas, imagenes cacheadas y branding configurable.
+Genera la imagen final del deck usando cartas vinculadas a metadatos de YGOPRODeck, imagenes cacheadas y branding configurable.
 
 Respuesta exitosa `200 OK`:
 
@@ -268,8 +262,8 @@ La previsualizacion y descarga en frontend se construyen con `storagePath` servi
 
 Reglas:
 
-- Solo se permite si la revision OCR fue confirmada.
-- Todas las entradas del deck deben estar resueltas contra `Card`.
+- Solo se permite si la revision de importacion Neuron fue confirmada.
+- Todas las entradas del deck deben estar vinculadas a `Card` mediante el cacheo de imagenes.
 - Todas las cartas deben tener imagen cacheada activa.
 - Si falta una carta o imagen, debe devolver `400 Bad Request` con la lista de dependencias faltantes.
 - El renderer debe producir una imagen `1080x1350`.
@@ -279,7 +273,7 @@ Reglas:
 - La imagen generada debe persistirse como `GENERATED_DECK_IMAGE`.
 - La imagen generada debe usar politica `TEMPORARY_CLEANUP_ALLOWED`.
 
-## 9. Configuracion de tienda
+## 8. Configuracion de tienda
 
 Los endpoints de configuracion reciben `storeId` en ruta y validan el alcance de tienda contra el usuario autenticado salvo para `root`.
 
@@ -554,7 +548,7 @@ Reglas:
 - `iconAssetId`, cuando exista, debe apuntar a un asset `SOCIAL_LOGO`.
 - Reemplazar redes no elimina fisicamente los iconos; siguen siendo assets permanentes.
 
-## 10. Autenticacion local
+## 9. Autenticacion local
 
 ### `POST /api/auth/root/initialize`
 
@@ -711,7 +705,7 @@ Reglas:
 - Cada tienda puede tener un solo `store_admin`.
 - El administrador creado queda vinculado a la tienda.
 
-## 11. Roles, permisos y asignaciones
+## 10. Roles, permisos y asignaciones
 
 Los endpoints de roles y permisos requieren token valido y permiso `security.manage`. El usuario `root` puede ejecutarlos aunque no tenga permisos asignados explicitamente.
 
@@ -826,7 +820,7 @@ Reglas:
 - Para usuarios no-root, el backend consulta permisos desde roles asignados.
 - Si faltan permisos, devuelve `403 Forbidden`.
 
-## 12. Ciclo de vida de decks
+## 11. Ciclo de vida de decks
 
 ### `POST /api/decks/{deckId}/inactivate`
 

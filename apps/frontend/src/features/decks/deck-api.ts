@@ -6,6 +6,7 @@ export type UploadDeckInput = {
   tournamentDate: string;
   resultLabel: string;
   deckName: string;
+  neuronDeckUrl: string;
   tournamentName?: string;
   eventTypeId?: string;
   tournamentTypeId?: string;
@@ -21,6 +22,22 @@ export type UploadDeckResponse = {
   status: string;
   extractionStatus: string;
   reviewStatus: string;
+  importedCardCount: number;
+};
+
+export type DeckSummary = {
+  deckId: string;
+  storeId: string;
+  storeName: string;
+  playerName: string;
+  deckName: string;
+  resultLabel: string;
+  tournamentDate: string;
+  status: string;
+  extractionStatus: string;
+  reviewStatus: string;
+  cardCount: number;
+  createdAt: string;
 };
 
 export type DeckSection = "MAIN" | "EXTRA" | "SIDE";
@@ -36,22 +53,9 @@ export type ExtractDeckResponse = {
   deckId: string;
   status: string;
   extractionStatus: string;
-  rawOcrText: string;
+  reviewStatus: string;
+  source?: "NEURON";
   cards: EditableDeckCard[];
-};
-
-export type ResolveCardNamesResponse = {
-  deckId: string;
-  resolved: number;
-  ambiguous: number;
-  unresolved: number;
-  cards: Array<{
-    deckCardId: string;
-    originalName: string;
-    resolutionStatus: "RESOLVED" | "AMBIGUOUS" | "UNRESOLVED";
-    resolvedEnglishName?: string | null;
-    cardId?: string | null;
-  }>;
 };
 
 export type ConfirmDeckReviewResponse = {
@@ -105,6 +109,17 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
 }
 
 export const deckApi = {
+  async listDecks(accessToken: string) {
+    const response = await fetch(`${API_BASE_URL}/decks`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    return parseJsonResponse<DeckSummary[]>(response);
+  },
+
   async uploadDeckList(accessToken: string, input: UploadDeckInput) {
     const formData = new FormData();
     formData.append("storeId", input.storeId);
@@ -112,6 +127,7 @@ export const deckApi = {
     formData.append("tournamentDate", input.tournamentDate);
     formData.append("resultLabel", input.resultLabel);
     formData.append("deckName", input.deckName);
+    formData.append("neuronDeckUrl", input.neuronDeckUrl);
     formData.append("deckListImage", input.deckListImage);
 
     const optionalFields = {
@@ -140,9 +156,9 @@ export const deckApi = {
     return parseJsonResponse<UploadDeckResponse>(response);
   },
 
-  async extractDeckList(accessToken: string, deckId: string) {
-    const response = await fetch(`${API_BASE_URL}/decks/${deckId}/extract`, {
-      method: "POST",
+  async getDeckCards(accessToken: string, deckId: string) {
+    const response = await fetch(`${API_BASE_URL}/decks/${deckId}/cards`, {
+      method: "GET",
       headers: {
         Authorization: `Bearer ${accessToken}`
       }
@@ -162,17 +178,6 @@ export const deckApi = {
     });
 
     return parseJsonResponse<ExtractDeckResponse>(response);
-  },
-
-  async resolveCardNames(accessToken: string, deckId: string) {
-    const response = await fetch(`${API_BASE_URL}/decks/${deckId}/resolve-card-names`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`
-      }
-    });
-
-    return parseJsonResponse<ResolveCardNamesResponse>(response);
   },
 
   async confirmDeckReview(accessToken: string, deckId: string) {
