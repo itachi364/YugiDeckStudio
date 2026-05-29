@@ -11,6 +11,7 @@ export type StoreConfiguration = {
   socialLinks?: unknown[];
   eventTypes?: unknown[];
   tournamentTypes?: unknown[];
+  tournaments?: unknown[];
 };
 
 export type UpdateStoreConfigurationInput = {
@@ -28,7 +29,7 @@ export type CreateStoreInput = {
   sourceCreditText?: string | null;
 };
 
-export type StoreAssetCategory = "STORE_LOGO" | "EVENT_LOGO" | "SOCIAL_LOGO" | "BACKGROUND_IMAGE";
+export type StoreAssetCategory = "STORE_LOGO" | "EVENT_LOGO" | "TOURNAMENT_LOGO" | "SOCIAL_LOGO" | "BACKGROUND_IMAGE";
 
 export type StoreSummary = {
   id: string;
@@ -64,11 +65,51 @@ export type StoreEventType = {
 
 export type StoreTournamentType = StoreEventType;
 
+export type StoreTournamentStatus = "OPEN" | "CLOSED";
+
+export type StoreTournament = {
+  id: string;
+  storeId?: string;
+  store?: {
+    id: string;
+    name: string;
+  } | null;
+  eventTypeId?: string | null;
+  eventType?: {
+    id: string;
+    name: string;
+  } | null;
+  name: string;
+  description?: string | null;
+  logoAssetId?: string | null;
+  eventDate: string;
+  location?: string | null;
+  status: StoreTournamentStatus;
+  closedAt?: string | null;
+  closureReason?: string | null;
+  _count?: {
+    decks: number;
+  };
+  decks?: Array<{
+    resultLabel: string;
+  }>;
+};
+
 export type ConfigureStoreCatalogInput = {
   name: string;
   description?: string | null;
   logoAssetId?: string | null;
   isActive?: boolean;
+};
+
+export type ConfigureTournamentInput = {
+  eventTypeId: string;
+  name: string;
+  description?: string | null;
+  logoAssetId?: string | null;
+  eventDate: string;
+  location?: string | null;
+  status?: StoreTournamentStatus;
 };
 
 export type StoreSocialLink = {
@@ -195,6 +236,16 @@ export const storeApi = {
     return parseJsonResponse<StoreEventType[]>(response);
   },
 
+  async listVisibleTournaments(accessToken: string) {
+    const response = await fetch(`${API_BASE_URL}/stores/tournaments`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    return parseJsonResponse<StoreTournament[]>(response);
+  },
+
   async createEventType(accessToken: string, storeId: string, input: ConfigureStoreCatalogInput) {
     const response = await fetch(`${API_BASE_URL}/stores/${storeId}/event-types`, {
       method: "POST",
@@ -240,6 +291,54 @@ export const storeApi = {
     });
 
     return parseJsonResponse<StoreTournamentType[]>(response);
+  },
+
+  async listTournaments(accessToken: string, storeId: string, status?: StoreTournamentStatus) {
+    const query = status ? `?status=${encodeURIComponent(status)}` : "";
+    const response = await fetch(`${API_BASE_URL}/stores/${storeId}/tournaments${query}`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    return parseJsonResponse<StoreTournament[]>(response);
+  },
+
+  async createTournament(accessToken: string, storeId: string, input: ConfigureTournamentInput) {
+    const response = await fetch(`${API_BASE_URL}/stores/${storeId}/tournaments`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: JSON.stringify(input)
+    });
+
+    return parseJsonResponse<StoreTournament>(response);
+  },
+
+  async updateTournament(accessToken: string, storeId: string, tournamentId: string, input: ConfigureTournamentInput) {
+    const response = await fetch(`${API_BASE_URL}/stores/${storeId}/tournaments/${tournamentId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: JSON.stringify(input)
+    });
+
+    return parseJsonResponse<StoreTournament>(response);
+  },
+
+  async closeTournament(accessToken: string, storeId: string, tournamentId: string) {
+    const response = await fetch(`${API_BASE_URL}/stores/${storeId}/tournaments/${tournamentId}/close`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    return parseJsonResponse<StoreTournament>(response);
   },
 
   async createTournamentType(accessToken: string, storeId: string, input: ConfigureStoreCatalogInput) {

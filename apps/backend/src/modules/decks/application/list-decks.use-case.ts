@@ -1,10 +1,13 @@
 import { ForbiddenException, Injectable } from "@nestjs/common";
-import { DeckStatus, ExtractionStatus, ReviewStatus } from "@prisma/client";
+import { DeckStatus, ExtractionStatus, ReviewStatus, TournamentStatus } from "@prisma/client";
 import { PrismaService } from "../../../infrastructure/prisma/prisma.service";
 import { AuthenticatedUserPayload } from "../../auth/ports/auth-token.port";
 
 export interface ListedDeckResult {
   deckId: string;
+  tournamentId: string;
+  tournamentName: string | null;
+  tournamentStatus: TournamentStatus;
   storeId: string;
   storeName: string;
   playerName: string;
@@ -58,6 +61,9 @@ export class ListDecksUseCase {
         },
         tournament: {
           select: {
+            id: true,
+            name: true,
+            status: true,
             eventDate: true
           }
         },
@@ -71,6 +77,9 @@ export class ListDecksUseCase {
 
     return decks.map((deck) => ({
       deckId: deck.id,
+      tournamentId: deck.tournament.id,
+      tournamentName: deck.tournament.name,
+      tournamentStatus: deck.tournament.status,
       storeId: deck.storeId,
       storeName: deck.store.name,
       playerName: deck.player.displayName,

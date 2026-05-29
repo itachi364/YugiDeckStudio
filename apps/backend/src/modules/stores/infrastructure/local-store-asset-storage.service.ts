@@ -63,6 +63,7 @@ export class LocalStoreAssetStorageService {
     const folders: Partial<Record<ImageAssetCategory, string>> = {
       [ImageAssetCategory.STORE_LOGO]: "store-logos",
       [ImageAssetCategory.EVENT_LOGO]: "event-logos",
+      [ImageAssetCategory.TOURNAMENT_LOGO]: "tournament-logos",
       [ImageAssetCategory.SOCIAL_LOGO]: "social-logos",
       [ImageAssetCategory.BACKGROUND_IMAGE]: "background-images"
     };

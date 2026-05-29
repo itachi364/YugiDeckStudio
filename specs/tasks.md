@@ -185,14 +185,14 @@
   - Pruebas:
     - Configuración de tienda.
     - Tipos de eventos.
-    - Tipos de torneos.
+    - Torneos.
     - Redes sociales y logos permanentes.
   - Criterios de finalización:
     - Contratos de configuración de tienda documentados.
     - Endpoint de subida de assets configurables implementado.
     - Assets de logos, fondos e iconos persistidos como `PERMANENT`.
     - Configuración de tipos de eventos implementada.
-    - Configuración de tipos de torneos implementada.
+    - Configuración de torneos implementada.
     - Configuración de redes sociales implementada.
 
 - [x] TASK-016: Implementar autenticación local, root y primer admin de tienda.
@@ -342,7 +342,7 @@
     - UI de carga de deck list disponible despues de login.
     - Cliente frontend consume `POST /api/decks/uploads` con `multipart/form-data`.
     - Formulario solicita `storeId`, jugador, fecha, resultado, deck usado e imagen.
-    - Metadatos opcionales de torneo, evento, tipo de torneo y ubicacion disponibles.
+    - Metadatos de torneo seleccionado, evento asociado, resultado y ubicacion disponibles.
     - UI muestra estado de subida y errores de validacion.
     - Pruebas frontend cubren carga exitosa y bloqueo sin imagen.
 
@@ -390,22 +390,22 @@
     - AC-010.
   - Pruebas:
     - Tipos de eventos.
-    - Tipos de torneos.
+    - Torneos.
     - Redes sociales.
   - Criterios de finalización:
     - UI de eventos, torneos y redes disponible después de login.
     - Cliente frontend consume `GET /api/stores/{storeId}/event-types`.
     - Cliente frontend consume `POST /api/stores/{storeId}/event-types`.
     - Cliente frontend consume `PUT /api/stores/{storeId}/event-types/{eventTypeId}`.
-    - Cliente frontend consume `GET /api/stores/{storeId}/tournament-types`.
-    - Cliente frontend consume `POST /api/stores/{storeId}/tournament-types`.
-    - Cliente frontend consume `PUT /api/stores/{storeId}/tournament-types/{tournamentTypeId}`.
+    - Cliente frontend consume `GET /api/stores/{storeId}/tournaments`.
+    - Cliente frontend consume `POST /api/stores/{storeId}/tournaments`.
+    - Cliente frontend consume `PUT /api/stores/{storeId}/tournaments/{tournamentId}`.
     - Cliente frontend consume `GET /api/stores/{storeId}/social-links`.
     - Cliente frontend consume `PUT /api/stores/{storeId}/social-links`.
     - UI permite listar y crear tipos de eventos.
-    - UI permite listar y crear tipos de torneos.
+    - UI permite listar y crear torneos.
     - UI permite reemplazar redes sociales de la tienda.
-    - Pruebas frontend cubren tipos de eventos, tipos de torneos y redes sociales.
+    - Pruebas frontend cubren eventos, torneos y redes sociales.
 
 - [x] TASK-027: Implementar UI de previsualización de imagen generada.
   - Criterios de aceptación:
@@ -749,3 +749,42 @@ No quedan decisiones funcionales abiertas para iniciar `v0.1.0`.
     - Los modales desktop tienen cierre explicito y scroll interno.
     - Las vistas mobile tienen accion `Volver`.
     - La sesion local se guarda con `lastActivityAt` y se elimina por inactividad.
+
+- [x] TASK-046: Convertir tipos de torneo en torneos operativos con cierre y logo.
+  - Criterios de aceptacion:
+    - AC-010.
+    - AC-049.
+    - AC-054.
+    - AC-055.
+    - AC-056.
+    - AC-057.
+  - Archivos:
+    - `apps/backend/prisma/schema.prisma`
+    - `apps/backend/prisma/migrations/000005_tournament_flow/migration.sql`
+    - `apps/backend/src/modules/stores/stores.controller.ts`
+    - `apps/backend/src/modules/stores/application/configure-tournaments.use-case.ts`
+    - `apps/backend/src/modules/decks/application/upload-deck-list.use-case.ts`
+    - `apps/backend/src/modules/decks/application/list-decks.use-case.ts`
+    - `apps/backend/src/modules/decks/application/generate-deck-image.use-case.ts`
+    - `apps/backend/src/modules/decks/infrastructure/node-canvas-deck-image-renderer.adapter.ts`
+    - `apps/frontend/src/features/stores/EventTypesIndexWorkspace.tsx`
+    - `apps/frontend/src/features/stores/StoreCatalogsWorkspace.tsx`
+    - `apps/frontend/src/features/decks/DeckUploadWorkspace.tsx`
+    - `apps/frontend/src/features/decks/deck-api.ts`
+    - `specs/requirements.md`
+    - `specs/design.md`
+    - `specs/api-contract.md`
+    - `README.md`
+  - Pruebas:
+    - Backend rechaza resultados fuera de la lista permitida.
+    - Backend rechaza cargas contra torneos cerrados.
+    - Backend cierra manualmente si existe `Ganador`.
+    - Backend cierra automaticamente al completar la distribucion 1/1/2/4.
+    - Frontend muestra selector de resultado y selector de torneo.
+    - Frontend deshabilita `Revisar` para decks confirmados.
+    - Renderer ubica el logo de torneo en la parte superior derecha.
+  - Criterios de finalizacion:
+    - La UI visible deja de hablar de `Tipos de torneos`.
+    - El index autenticado muestra torneos por nombre y evento asociado.
+    - Cada torneo puede tener logo cargado como asset permanente.
+    - Torneos cerrados no admiten nuevas cargas.

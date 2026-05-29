@@ -39,18 +39,16 @@ Campos obligatorios:
 | `storeId` | string | Debe existir en base de datos. |
 | `neuronDeckUrl` | string | Link publico de Neuron o Konami DB. |
 | `playerName` | string | No vacío. |
-| `tournamentDate` | string | Fecha ISO válida. |
-| `resultLabel` | string | No vacío. Ejemplos: `Top 8`, `Ganador`. |
+| `resultLabel` | string | Uno de: `Ganador`, `Segundo Puesto`, `Top 3 - 4`, `Top 8`. |
+| `tournamentId` | string | Torneo abierto existente. |
 | `deckName` | string | No vacío. |
 
 Campos opcionales:
 
 | Campo | Tipo | Reglas |
 | --- | --- | --- |
-| `tournamentName` | string | Nombre del torneo. |
-| `eventTypeId` | string | Tipo de evento configurado. |
-| `tournamentTypeId` | string | Tipo de torneo configurado. |
-| `location` | string | Ciudad o ubicación. |
+| `tournamentDate` | string | Fecha ISO válida opcional para compatibilidad; la fecha operativa proviene del torneo seleccionado. |
+| `location` | string | Ciudad o ubicación opcional para compatibilidad; la ubicación operativa proviene del torneo seleccionado. |
 
 Respuesta exitosa `201 Created`:
 
@@ -71,7 +69,9 @@ Reglas:
 - Debe almacenar físicamente la imagen en el volumen local configurado por `IMAGE_STORAGE_PATH`.
 - Debe persistir el asset como `UPLOADED_DECKLIST`.
 - Debe usar política `TEMPORARY_CLEANUP_ALLOWED`.
-- Debe persistir `Player`, `Tournament`, `Deck` y `DeckCard` importadas desde Neuron.
+- Debe persistir `Player`, `Deck` y `DeckCard` importadas desde Neuron, asociadas al torneo existente seleccionado.
+- Debe asociar el deck al torneo indicado y rechazar la carga si el torneo esta cerrado.
+- Debe cerrar automaticamente el torneo cuando la carga complete la distribucion Top Cut exacta: 1 `Ganador`, 1 `Segundo Puesto`, 2 `Top 3 - 4` y 4 `Top 8`.
 - No debe existir un endpoint de reemplazo de imagen ni de link Neuron para el mismo deck.
 - Si un caso de uso intenta cargar una nueva imagen para un deck que ya tiene `uploadedImageAssetId`, debe rechazarse con `409 Conflict`.
 - Debe rechazar links que no pertenezcan a `neuron.konami.net` o `www.db.yugioh-card.com`.
@@ -90,6 +90,9 @@ Respuesta exitosa `200 OK`:
 [
   {
     "deckId": "uuid",
+    "tournamentId": "uuid",
+    "tournamentName": "Torneo Mes de Abril",
+    "tournamentStatus": "OPEN",
     "storeId": "uuid",
     "storeName": "Ready For Duel",
     "playerName": "Michael Vanegas",
@@ -300,7 +303,7 @@ Reglas:
 
 ### `GET /api/stores/{storeId}`
 
-Devuelve configuracion de tienda, redes, tipos de eventos y tipos de torneos.
+Devuelve configuracion de tienda, redes, eventos y torneos.
 
 ### `POST /api/stores`
 
@@ -379,7 +382,7 @@ Campos:
 
 | Campo | Tipo | Reglas |
 | --- | --- | --- |
-| `category` | string | `STORE_LOGO`, `EVENT_LOGO`, `SOCIAL_LOGO` o `BACKGROUND_IMAGE`. |
+| `category` | string | `STORE_LOGO`, `EVENT_LOGO`, `TOURNAMENT_LOGO`, `SOCIAL_LOGO` o `BACKGROUND_IMAGE`. |
 
 Respuesta exitosa `201 Created`:
 
@@ -406,7 +409,7 @@ Query params:
 
 | Campo | Tipo | Reglas |
 | --- | --- | --- |
-| `category` | string | Opcional. `STORE_LOGO`, `EVENT_LOGO`, `SOCIAL_LOGO` o `BACKGROUND_IMAGE`. |
+| `category` | string | Opcional. `STORE_LOGO`, `EVENT_LOGO`, `TOURNAMENT_LOGO`, `SOCIAL_LOGO` o `BACKGROUND_IMAGE`. |
 
 Respuesta exitosa `200 OK`:
 
@@ -430,7 +433,7 @@ Reglas:
 
 ### `GET /api/stores/{storeId}/event-types`
 
-Lista tipos de eventos de la tienda.
+Lista eventos de la tienda.
 
 ### `GET /api/stores/event-types`
 
@@ -445,11 +448,11 @@ Reglas:
 
 ### `POST /api/stores/{storeId}/event-types`
 
-Crea un tipo de evento.
+Crea un evento.
 
 ### `PUT /api/stores/{storeId}/event-types/{eventTypeId}`
 
-Actualiza un tipo de evento de la tienda.
+Actualiza un evento de la tienda.
 
 Body:
 
@@ -465,7 +468,7 @@ Body:
 Reglas:
 
 - `logoAssetId`, cuando exista, debe apuntar a un asset `EVENT_LOGO`.
-- Solo se actualizan tipos de eventos de la tienda indicada.
+- Solo se actualizan eventos de la tienda indicada.
 - `operator`, `store_admin` y `root` pueden crear o modificar eventos dentro de su alcance de tienda.
 
 ### `DELETE /api/stores/{storeId}/event-types/{eventTypeId}`
@@ -490,33 +493,76 @@ Reglas:
 - La operación no borra físicamente el registro; actualiza `isActive = false`.
 - Usuarios no-root solo pueden inactivar eventos de su tienda.
 
-### `GET /api/stores/{storeId}/tournament-types`
+### `GET /api/stores/tournaments`
 
-Lista tipos de torneos de la tienda.
+Lista torneos visibles para el usuario autenticado.
 
-### `POST /api/stores/{storeId}/tournament-types`
+Reglas:
 
-Crea un tipo de torneo.
+- `root` recibe torneos de todas las tiendas.
+- Usuarios no-root reciben torneos de su tienda vinculada.
+- La respuesta muestra el nombre del torneo como dato principal y el evento asociado como dato secundario.
 
-### `PUT /api/stores/{storeId}/tournament-types/{tournamentTypeId}`
+### `GET /api/stores/{storeId}/tournaments`
 
-Actualiza un tipo de torneo de la tienda.
+Lista torneos de la tienda.
+
+Query params:
+
+| Campo | Tipo | Reglas |
+| --- | --- | --- |
+| `status` | string | Opcional. `OPEN` o `CLOSED`. |
+
+### `POST /api/stores/{storeId}/tournaments`
+
+Crea un torneo de la tienda asociado a un evento.
+
+### `PUT /api/stores/{storeId}/tournaments/{tournamentId}`
+
+Actualiza un torneo de la tienda.
 
 Body:
 
 ```json
 {
-  "name": "Local",
-  "description": "Torneo local semanal",
+  "eventTypeId": "uuid",
+  "name": "Torneo Mes de Abril",
+  "description": "Top Cut mensual",
   "logoAssetId": "uuid",
-  "isActive": true
+  "eventDate": "2026-05-06",
+  "location": "Bogota"
 }
 ```
 
 Reglas:
 
-- `logoAssetId`, cuando exista, debe apuntar a un asset `EVENT_LOGO`.
-- Solo se actualizan tipos de torneos de la tienda indicada.
+- `eventTypeId` debe apuntar a un evento de la misma tienda.
+- `logoAssetId`, cuando exista, debe apuntar a un asset `TOURNAMENT_LOGO`.
+- Solo se actualizan torneos de la tienda indicada.
+- Los torneos se crean como `OPEN`; el estado solo pasa a `CLOSED` mediante cierre manual o automatico.
+- Un torneo cerrado no debe aceptar nuevas cargas de decks.
+
+### `POST /api/stores/{storeId}/tournaments/{tournamentId}/close`
+
+Cierra manualmente un torneo de la tienda.
+
+Respuesta exitosa `200 OK`:
+
+```json
+{
+  "id": "uuid",
+  "storeId": "uuid",
+  "name": "Torneo Mes de Abril",
+  "status": "CLOSED",
+  "closedAt": "2026-05-29T00:00:00.000Z"
+}
+```
+
+Reglas:
+
+- Requiere token valido y alcance de tienda.
+- Solo se permite si el torneo tiene al menos un deck con resultado `Ganador`.
+- Si ya esta cerrado, devuelve el torneo cerrado sin duplicar cierre.
 
 ### `GET /api/stores/{storeId}/social-links`
 

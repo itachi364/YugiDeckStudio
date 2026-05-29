@@ -1,5 +1,5 @@
 import { ForbiddenException } from "@nestjs/common";
-import { DeckStatus, ExtractionStatus, ReviewStatus } from "@prisma/client";
+import { DeckStatus, ExtractionStatus, ReviewStatus, TournamentStatus } from "@prisma/client";
 import { ListDecksUseCase } from "../src/modules/decks/application/list-decks.use-case";
 
 describe("ListDecksUseCase", () => {
@@ -29,6 +29,9 @@ describe("ListDecksUseCase", () => {
           name: "Ready For Duel"
         },
         tournament: {
+          id: "tournament-id",
+          name: "Torneo Mes de Abril",
+          status: TournamentStatus.OPEN,
           eventDate: new Date("2026-05-25T00:00:00.000Z")
         },
         deckCards: [{ quantity: 3 }, { quantity: 2 }]
@@ -60,6 +63,9 @@ describe("ListDecksUseCase", () => {
         deckId: "deck-id",
         storeName: "Ready For Duel",
         playerName: "Michael",
+        tournamentId: "tournament-id",
+        tournamentName: "Torneo Mes de Abril",
+        tournamentStatus: TournamentStatus.OPEN,
         cardCount: 5
       })
     );

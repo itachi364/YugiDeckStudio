@@ -13,7 +13,7 @@ Esta version es local-only. No incluye despliegue a internet, Hostinger, AWS ni 
 - Listado de decks visibles en la ventana de carga, con aislamiento por tienda y vista global para `root`.
 - Cache de metadatos desde YGOPRODeck usando los nombres revisados.
 - Cache permanente de imagenes de cartas en volumen Docker local.
-- Configuracion de tienda, logos, fondo, tipos de eventos, tipos de torneos y redes sociales.
+- Configuracion de tienda, logos, fondo, eventos, torneos operativos y redes sociales.
 - Generacion de imagen final `1080x1350` en PNG desde la pantalla `Decks`.
 - Previsualizacion y descarga local de la imagen generada desde `Decks`, en modal desktop o vista mobile completa.
 - Sesion local restaurable despues de F5 con cierre automatico tras 20 minutos de inactividad.
@@ -160,7 +160,7 @@ El primer login obliga a cambiar la contrasena antes de usar el resto de modulos
 1. Inicia sesion como `root` y cambia la contrasena temporal.
 2. Crea o configura el primer administrador de tienda.
 3. Configura tienda, logos, fondo, eventos, torneos y redes sociales.
-4. Carga una imagen de deck list e incluye el link publico de Neuron.
+4. Carga una imagen de deck list, selecciona un torneo abierto, selecciona el resultado e incluye el link publico de Neuron.
 5. Desde el resultado de carga o el listado de decks, abre `Revisar deck`.
 6. Revisa/corrige la composicion y confirma el deck.
 7. Desde la fila del deck confirmado en `Decks`, usa `Generar imagen`.
@@ -189,6 +189,7 @@ El volumen `yugideck_image_data` guarda:
 - Imagenes finales generadas: temporales.
 - Imagenes de cartas: permanentes.
 - Logos de tienda, eventos y redes: permanentes.
+- Logos de torneos: permanentes.
 - Fondos configurables: permanentes.
 
 El backend e `image-cleaner` corren como usuario no-root. Docker Compose ejecuta el servicio `image-permissions` antes de iniciar esos servicios para que `/data/images` pueda escribirse sin ejecutar la aplicacion como root.
@@ -256,7 +257,9 @@ Endpoints principales:
 - `PUT /api/stores/{storeId}`
 - `POST /api/stores/{storeId}/assets`
 - `GET|POST|PUT /api/stores/{storeId}/event-types`
-- `GET|POST|PUT /api/stores/{storeId}/tournament-types`
+- `GET /api/stores/tournaments`
+- `GET|POST|PUT /api/stores/{storeId}/tournaments`
+- `POST /api/stores/{storeId}/tournaments/{tournamentId}/close`
 - `GET|PUT /api/stores/{storeId}/social-links`
 - `POST /api/maintenance/image-cleanup/run`
 

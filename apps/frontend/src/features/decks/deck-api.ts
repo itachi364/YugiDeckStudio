@@ -3,7 +3,8 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 export type UploadDeckInput = {
   storeId: string;
   playerName: string;
-  tournamentDate: string;
+  tournamentDate?: string;
+  tournamentId: string;
   resultLabel: string;
   deckName: string;
   neuronDeckUrl: string;
@@ -23,10 +24,14 @@ export type UploadDeckResponse = {
   extractionStatus: string;
   reviewStatus: string;
   importedCardCount: number;
+  tournamentStatus?: string;
 };
 
 export type DeckSummary = {
   deckId: string;
+  tournamentId: string;
+  tournamentName?: string | null;
+  tournamentStatus?: string;
   storeId: string;
   storeName: string;
   playerName: string;
@@ -124,7 +129,7 @@ export const deckApi = {
     const formData = new FormData();
     formData.append("storeId", input.storeId);
     formData.append("playerName", input.playerName);
-    formData.append("tournamentDate", input.tournamentDate);
+    formData.append("tournamentId", input.tournamentId);
     formData.append("resultLabel", input.resultLabel);
     formData.append("deckName", input.deckName);
     formData.append("neuronDeckUrl", input.neuronDeckUrl);
@@ -132,6 +137,7 @@ export const deckApi = {
 
     const optionalFields = {
       tournamentName: input.tournamentName,
+      tournamentDate: input.tournamentDate,
       eventTypeId: input.eventTypeId,
       tournamentTypeId: input.tournamentTypeId,
       location: input.location

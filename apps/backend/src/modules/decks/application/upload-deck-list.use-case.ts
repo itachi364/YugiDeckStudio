@@ -6,7 +6,9 @@ import {
   ImageAssetCategory,
   RetentionPolicy,
   ResolutionStatus,
-  ReviewStatus
+  ReviewStatus,
+  TournamentStatus,
+  Prisma
 } from "@prisma/client";
 import { PrismaService } from "../../../infrastructure/prisma/prisma.service";
 import { LocalImageStorageService } from "../infrastructure/local-image-storage.service";
@@ -27,7 +29,8 @@ export interface UploadDeckListFile {
 export interface UploadDeckListInput {
   storeId: string;
   playerName: string;
-  tournamentDate: string;
+  tournamentDate?: string;
+  tournamentId: string;
   resultLabel: string;
   deckName: string;
   neuronDeckUrl: string;
@@ -47,11 +50,13 @@ export interface UploadDeckListResult {
   extractionStatus: ExtractionStatus;
   reviewStatus: ReviewStatus;
   importedCardCount: number;
+  tournamentStatus: TournamentStatus;
 }
 
 @Injectable()
 export class UploadDeckListUseCase {
   private readonly allowedMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+  private readonly allowedResultLabels = new Set(["Ganador", "Segundo Puesto", "Top 3 - 4", "Top 8"]);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -63,7 +68,6 @@ export class UploadDeckListUseCase {
   async execute(input: UploadDeckListInput): Promise<UploadDeckListResult> {
     this.validateInput(input);
 
-    const tournamentDate = new Date(input.tournamentDate);
     const store = await this.prisma.store.findUnique({
       where: {
         id: input.storeId
@@ -77,11 +81,13 @@ export class UploadDeckListUseCase {
       throw new BadRequestException("La tienda indicada no existe.");
     }
 
+    await this.assertTournamentCanReceiveDeck(input.storeId, input.tournamentId);
+
     const importedDeck = await this.neuronDeckImport.importDeck(input.neuronDeckUrl);
     const storedFile = await this.imageStorage.saveUploadedDeckList(input.file);
 
     try {
-      return await this.persistUpload(input, tournamentDate, storedFile, importedDeck);
+      return await this.persistUpload(input, storedFile, importedDeck);
     } catch (error) {
       await this.imageStorage.remove(storedFile.storagePath);
       throw error;
@@ -123,7 +129,7 @@ export class UploadDeckListUseCase {
     const requiredFields = [
       ["storeId", input.storeId],
       ["playerName", input.playerName],
-      ["tournamentDate", input.tournamentDate],
+      ["tournamentId", input.tournamentId],
       ["resultLabel", input.resultLabel],
       ["deckName", input.deckName],
       ["neuronDeckUrl", input.neuronDeckUrl]
@@ -135,14 +141,38 @@ export class UploadDeckListUseCase {
       throw new BadRequestException(`Campos obligatorios faltantes: ${missingFields.map(([field]) => field).join(", ")}.`);
     }
 
-    if (Number.isNaN(new Date(input.tournamentDate).getTime())) {
+    if (input.tournamentDate && Number.isNaN(new Date(input.tournamentDate).getTime())) {
       throw new BadRequestException("La fecha del torneo debe ser una fecha válida.");
+    }
+
+    if (!this.allowedResultLabels.has(input.resultLabel.trim())) {
+      throw new BadRequestException("El resultado del torneo debe ser Ganador, Segundo Puesto, Top 3 - 4 o Top 8.");
+    }
+  }
+
+  private async assertTournamentCanReceiveDeck(storeId: string, tournamentId: string): Promise<void> {
+    const tournament = await this.prisma.tournament.findFirst({
+      where: {
+        id: tournamentId,
+        storeId
+      },
+      select: {
+        id: true,
+        status: true
+      }
+    });
+
+    if (!tournament) {
+      throw new BadRequestException("El torneo indicado no existe para la tienda.");
+    }
+
+    if (tournament.status === TournamentStatus.CLOSED) {
+      throw new ConflictException("El torneo indicado ya esta cerrado y no permite cargar mas decks.");
     }
   }
 
   private async persistUpload(
     input: UploadDeckListInput,
-    tournamentDate: Date,
     storedFile: StoredImageFile,
     importedDeck: ImportedNeuronDeck
   ): Promise<UploadDeckListResult> {
@@ -166,21 +196,10 @@ export class UploadDeckListUseCase {
         }
       });
 
-      const tournament = await transaction.tournament.create({
-        data: {
-          storeId: input.storeId,
-          eventTypeId: this.emptyToUndefined(input.eventTypeId),
-          tournamentTypeId: this.emptyToUndefined(input.tournamentTypeId),
-          name: this.emptyToUndefined(input.tournamentName),
-          eventDate: tournamentDate,
-          location: this.emptyToUndefined(input.location)
-        }
-      });
-
       const createdDeck = await transaction.deck.create({
         data: {
           playerId: player.id,
-          tournamentId: tournament.id,
+          tournamentId: input.tournamentId,
           storeId: input.storeId,
           deckName: input.deckName.trim(),
           resultLabel: input.resultLabel.trim(),
@@ -212,7 +231,12 @@ export class UploadDeckListUseCase {
         }))
       });
 
-      return createdDeck;
+      const tournamentStatus = await this.closeTournamentAutomaticallyIfComplete(transaction, input.tournamentId);
+
+      return {
+        ...createdDeck,
+        tournamentStatus
+      };
     });
 
     return {
@@ -223,8 +247,71 @@ export class UploadDeckListUseCase {
       status: deck.status,
       extractionStatus: deck.extractionStatus,
       reviewStatus: deck.reviewStatus,
-      importedCardCount: importedDeck.cards.length
+      importedCardCount: importedDeck.cards.length,
+      tournamentStatus: deck.tournamentStatus
     };
+  }
+
+  private async closeTournamentAutomaticallyIfComplete(
+    transaction: Prisma.TransactionClient,
+    tournamentId: string
+  ): Promise<TournamentStatus> {
+    const tournament = await transaction.tournament.findUniqueOrThrow({
+      where: {
+        id: tournamentId
+      },
+      select: {
+        status: true,
+        decks: {
+          where: {
+            status: {
+              not: DeckStatus.INACTIVE
+            }
+          },
+          select: {
+            resultLabel: true
+          }
+        }
+      }
+    });
+
+    if (tournament.status === TournamentStatus.CLOSED || !this.isTopCutComplete(tournament.decks.map((deck) => deck.resultLabel))) {
+      return tournament.status;
+    }
+
+    const updatedTournament = await transaction.tournament.update({
+      where: {
+        id: tournamentId
+      },
+      data: {
+        status: TournamentStatus.CLOSED,
+        closedAt: new Date(),
+        closureReason: "AUTO_TOP_CUT_COMPLETE"
+      },
+      select: {
+        status: true
+      }
+    });
+
+    return updatedTournament.status;
+  }
+
+  private isTopCutComplete(resultLabels: string[]): boolean {
+    if (resultLabels.length !== 8) {
+      return false;
+    }
+
+    const counts = resultLabels.reduce<Record<string, number>>((accumulator, resultLabel) => {
+      accumulator[resultLabel] = (accumulator[resultLabel] ?? 0) + 1;
+      return accumulator;
+    }, {});
+
+    return (
+      counts.Ganador === 1 &&
+      counts["Segundo Puesto"] === 1 &&
+      counts["Top 3 - 4"] === 2 &&
+      counts["Top 8"] === 4
+    );
   }
 
   private emptyToUndefined(value?: string): string | undefined {

@@ -81,7 +81,8 @@ export class NodeCanvasDeckImageRendererAdapter implements DeckImageRendererPort
     context: ReturnType<ReturnType<typeof createCanvas>["getContext"]>,
     input: RenderDeckImageInput
   ): Promise<void> {
-    const logoPaths = [input.primaryLogoPath, input.secondaryLogoPath, input.eventLogoPath].filter(Boolean) as string[];
+    const topRightLogoPath = input.tournamentLogoPath ?? input.eventLogoPath;
+    const logoPaths = [input.primaryLogoPath, input.secondaryLogoPath, topRightLogoPath].filter(Boolean) as string[];
     const logoSlots = [
       { x: 42, y: 38, width: 220, height: 95 },
       { x: 430, y: 28, width: 220, height: 115 },
@@ -109,7 +110,7 @@ export class NodeCanvasDeckImageRendererAdapter implements DeckImageRendererPort
 
     context.font = "24px Arial";
     const date = input.tournamentDate.toISOString().slice(0, 10);
-    const eventLabel = [input.eventTypeName, input.tournamentTypeName, date].filter(Boolean).join(" | ");
+    const eventLabel = [input.eventTypeName, date].filter(Boolean).join(" | ");
     context.strokeText(eventLabel, 1038, 282);
     context.fillText(eventLabel, 1038, 282);
   }

@@ -12,7 +12,11 @@ export class UploadDeckListDto {
   playerName!: string;
 
   @IsDateString()
-  tournamentDate!: string;
+  @IsOptional()
+  tournamentDate?: string;
+
+  @IsUUID()
+  tournamentId!: string;
 
   @IsString()
   @MinLength(1)

@@ -2,7 +2,7 @@ import { FormEvent, ReactNode, useCallback, useEffect, useState } from "react";
 import { AlertCircle, ArrowLeft, Download, ImageDown, ImageUp, ListChecks, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { DeckReviewWorkspace } from "./DeckReviewWorkspace";
 import { CacheCardImagesResponse, deckApi, DeckSummary, GenerateDeckImageResponse, UploadDeckResponse } from "./deck-api";
-import { StoreEventType, StoreSummary, StoreTournamentType, storeApi } from "../stores/store-api";
+import { StoreSummary, StoreTournament, storeApi } from "../stores/store-api";
 
 type DeckUploadWorkspaceProps = {
   accessToken: string;
@@ -21,6 +21,7 @@ type GenerationResult = {
 };
 
 const IMAGE_STORAGE_BASE_URL = import.meta.env.VITE_IMAGE_STORAGE_BASE_URL ?? "http://127.0.0.1:8081";
+const RESULT_OPTIONS = ["Ganador", "Segundo Puesto", "Top 3 - 4", "Top 8"];
 
 export function DeckUploadWorkspace({ accessToken, defaultStoreId }: DeckUploadWorkspaceProps) {
   const [feedback, setFeedback] = useState<Feedback>(null);
@@ -29,8 +30,7 @@ export function DeckUploadWorkspace({ accessToken, defaultStoreId }: DeckUploadW
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [storeId, setStoreId] = useState(defaultStoreId ?? "");
   const [stores, setStores] = useState<StoreSummary[]>([]);
-  const [eventTypes, setEventTypes] = useState<StoreEventType[]>([]);
-  const [tournamentTypes, setTournamentTypes] = useState<StoreTournamentType[]>([]);
+  const [tournaments, setTournaments] = useState<StoreTournament[]>([]);
   const [decks, setDecks] = useState<DeckSummary[]>([]);
   const [reviewDeckId, setReviewDeckId] = useState<string | null>(null);
   const [generationResult, setGenerationResult] = useState<GenerationResult | null>(null);
@@ -75,23 +75,17 @@ export function DeckUploadWorkspace({ accessToken, defaultStoreId }: DeckUploadW
 
   useEffect(() => {
     if (!storeId) {
-      setEventTypes([]);
-      setTournamentTypes([]);
+      setTournaments([]);
       return;
     }
 
-    Promise.all([
-      storeApi.listEventTypes(accessToken, storeId),
-      storeApi.listTournamentTypes(accessToken, storeId)
-    ])
-      .then(([events, tournaments]) => {
-        setEventTypes(events);
-        setTournamentTypes(tournaments);
-      })
+    storeApi
+      .listTournaments(accessToken, storeId, "OPEN")
+      .then(setTournaments)
       .catch((error: unknown) => {
         setFeedback({
           tone: "error",
-          message: error instanceof Error ? error.message : "No fue posible cargar eventos y torneos."
+          message: error instanceof Error ? error.message : "No fue posible cargar torneos abiertos."
         });
       });
   }, [accessToken, storeId]);
@@ -116,14 +110,10 @@ export function DeckUploadWorkspace({ accessToken, defaultStoreId }: DeckUploadW
       const result = await deckApi.uploadDeckList(accessToken, {
         storeId: String(formData.get("storeId") ?? ""),
         playerName: String(formData.get("playerName") ?? ""),
-        tournamentDate: String(formData.get("tournamentDate") ?? ""),
+        tournamentId: String(formData.get("tournamentId") ?? ""),
         resultLabel: String(formData.get("resultLabel") ?? ""),
         deckName: String(formData.get("deckName") ?? ""),
         neuronDeckUrl: String(formData.get("neuronDeckUrl") ?? ""),
-        tournamentName: String(formData.get("tournamentName") ?? ""),
-        eventTypeId: String(formData.get("eventTypeId") ?? ""),
-        tournamentTypeId: String(formData.get("tournamentTypeId") ?? ""),
-        location: String(formData.get("location") ?? ""),
         deckListImage: selectedFile
       });
 
@@ -293,12 +283,26 @@ export function DeckUploadWorkspace({ accessToken, defaultStoreId }: DeckUploadW
           <input name="playerName" required type="text" />
         </label>
         <label>
-          Fecha del torneo
-          <input name="tournamentDate" required type="date" />
+          Resultado
+          <select name="resultLabel" required>
+            <option value="">Selecciona resultado</option>
+            {RESULT_OPTIONS.map((resultOption) => (
+              <option key={resultOption} value={resultOption}>
+                {resultOption}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
-          Resultado
-          <input name="resultLabel" placeholder="Top 8 o Ganador" required type="text" />
+          Torneo
+          <select name="tournamentId" required>
+            <option value="">Selecciona un torneo abierto</option>
+            {tournaments.map((tournament) => (
+              <option key={tournament.id} value={tournament.id}>
+                {tournament.name}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
           Deck usado
@@ -312,36 +316,6 @@ export function DeckUploadWorkspace({ accessToken, defaultStoreId }: DeckUploadW
             required
             type="url"
           />
-        </label>
-        <label>
-          Torneo
-          <input name="tournamentName" type="text" />
-        </label>
-        <label>
-          Tipo de evento
-          <select name="eventTypeId">
-            <option value="">Sin tipo de evento</option>
-            {eventTypes.map((eventType) => (
-              <option key={eventType.id} value={eventType.id}>
-                {eventType.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Tipo de torneo
-          <select name="tournamentTypeId">
-            <option value="">Sin tipo de torneo</option>
-            {tournamentTypes.map((tournamentType) => (
-              <option key={tournamentType.id} value={tournamentType.id}>
-                {tournamentType.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Ubicacion
-          <input name="location" type="text" />
         </label>
         <label>
           Imagen deck list
@@ -394,7 +368,10 @@ export function DeckUploadWorkspace({ accessToken, defaultStoreId }: DeckUploadW
               <article className="table-row deck-list-row" key={deck.deckId}>
                 <div>
                   <strong>{deck.deckName}</strong>
-                  <span>{deck.playerName}</span>
+                  <span>
+                    {deck.playerName}
+                    {deck.tournamentName ? ` - ${deck.tournamentName}` : ""}
+                  </span>
                 </div>
                 <span>{deck.storeName}</span>
                 <span>{formatDate(deck.tournamentDate)}</span>
@@ -403,7 +380,12 @@ export function DeckUploadWorkspace({ accessToken, defaultStoreId }: DeckUploadW
                 <span>{deck.reviewStatus}</span>
                 <span>{deck.cardCount} cartas</span>
                 <div className="row-actions">
-                  <button className="secondary-button" type="button" onClick={() => setReviewDeckId(deck.deckId)}>
+                  <button
+                    className="secondary-button"
+                    disabled={deck.reviewStatus === "CONFIRMED"}
+                    type="button"
+                    onClick={() => setReviewDeckId(deck.deckId)}
+                  >
                     <ListChecks size={18} aria-hidden="true" />
                     <span>Revisar</span>
                   </button>

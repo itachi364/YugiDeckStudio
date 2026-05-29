@@ -54,7 +54,7 @@ const authModes: Array<{
   },
   {
     mode: "events-index",
-    label: "Eventos",
+    label: "Torneos",
     icon: CalendarDays
   },
   {
@@ -433,7 +433,7 @@ function getTitle(mode: AuthMode): string {
   }
 
   if (mode === "events-index") {
-    return "Eventos configurados";
+    return "Torneos configurados";
   }
 
   if (mode === "deck-upload") {

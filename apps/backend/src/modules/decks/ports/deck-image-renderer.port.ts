@@ -25,6 +25,7 @@ export interface RenderDeckImageInput {
   tournamentName?: string;
   eventTypeName?: string;
   tournamentTypeName?: string;
+  tournamentLogoPath?: string;
   sourceCreditText?: string;
   backgroundColor?: string;
   backgroundImagePath?: string;

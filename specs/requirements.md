@@ -23,7 +23,8 @@ Incluye:
 - Generar una imagen final del deck con branding y redes sociales configurables.
 - Generar la imagen final en formato `1080x1350` px.
 - Usar una plantilla base parametrizable para `v0.1.0`.
-- Configurar tiendas, redes sociales, tipos de eventos y tipos de torneos.
+- Configurar tiendas, redes sociales, eventos y torneos.
+- Cerrar torneos de forma manual o automatica segun los resultados Top Cut cargados.
 - Registrar usuarios e iniciar sesión.
 - Crear un único usuario `root` local inicial.
 - Forzar cambio de contraseña de `root` en el primer inicio de sesión.
@@ -75,7 +76,7 @@ Metadatos obligatorios durante la carga:
 - Link público de Yu-Gi-Oh! Neuron.
 - Nombre del jugador.
 - Fecha del torneo.
-- Resultado del torneo, ya sea posición de Top o estado de ganador.
+- Resultado del torneo usando una de las opciones permitidas: `Ganador`, `Segundo Puesto`, `Top 3 - 4` o `Top 8`.
 - Nombre del deck usado.
 
 Metadatos opcionales:
@@ -126,13 +127,30 @@ La aplicación debe persistir metadatos de deck list subida, jugador, torneo, de
 
 La aplicación debe generar una imagen compartible similar a la referencia visual suministrada.
 
-La imagen generada debe incluir Main Deck, Extra Deck, Side Deck, nombre del jugador, fecha del torneo, resultado, nombre del deck, tipo de evento o torneo cuando aplique, logos, redes sociales y credito inferior/fuente del deck list.
+La imagen generada debe incluir Main Deck, Extra Deck, Side Deck, nombre del jugador, fecha del torneo, resultado, nombre del deck, evento o torneo cuando aplique, logos, redes sociales y credito inferior/fuente del deck list.
 
 ### REQ-008: Configurar tienda, eventos, torneos y redes sociales
 
-La aplicación debe permitir configurar datos de tienda, logos, tipos de eventos, tipos de torneos, redes sociales, logos/iconos de redes sociales, credito inferior/fuente del deck list, fondo propio y color de fondo.
+La aplicación debe permitir configurar datos de tienda, logos, eventos, torneos, redes sociales, logos/iconos de redes sociales, credito inferior/fuente del deck list, fondo propio y color de fondo.
 
-Los logos de tiendas, logos de eventos y logos/iconos de redes sociales se consideran assets permanentes y no deben ser eliminados por el proceso semanal de depuración.
+Los logos de tiendas, logos de eventos, logos de torneos y logos/iconos de redes sociales se consideran assets permanentes y no deben ser eliminados por el proceso semanal de depuración.
+
+Los eventos son variedades o categorias activas de una tienda. Un evento puede tener muchos torneos. Un torneo pertenece a un solo evento y es la entidad operativa que puede cerrarse.
+
+Cada torneo debe permitir configurar nombre, descripcion opcional, evento asociado, logo opcional y estado `OPEN` o `CLOSED`.
+
+### REQ-008A: Cierre de torneo
+
+La aplicación debe cerrar automaticamente un torneo cuando existan ocho decks cargados para ese torneo con esta distribucion exacta de resultados:
+
+- 1 `Ganador`.
+- 1 `Segundo Puesto`.
+- 2 `Top 3 - 4`.
+- 4 `Top 8`.
+
+La aplicación debe permitir cierre manual de torneo cuando exista al menos un deck con resultado `Ganador`.
+
+Un torneo cerrado no debe permitir nuevas cargas de decks.
 
 ### REQ-009: Registro, login y sesión local
 
@@ -287,7 +305,7 @@ Dado que un operador sube una imagen válida de deck list, incluye un link públ
 
 ### AC-002: Validación de metadatos obligatorios
 
-Dado que un operador omite link Neuron, nombre del jugador, fecha del torneo, resultado del torneo o nombre del deck, cuando envía la carga, entonces el sistema rechaza la solicitud con errores de validación.
+Dado que un operador omite link Neuron, nombre del jugador, torneo abierto, resultado del torneo o nombre del deck, cuando envía la carga, entonces el sistema rechaza la solicitud con errores de validación.
 
 ### AC-003: Importación Neuron del deck
 
@@ -323,7 +341,9 @@ Dado un deck validado con cantidades legales, cuando se genera la imagen, entonc
 
 ### AC-010: Configuración de tienda, eventos, torneos y redes
 
-Dado que un administrador de tienda configura logos, redes sociales, tipos de eventos o tipos de torneos, cuando se genera una nueva imagen de deck, entonces la imagen generada usa los valores configurados que correspondan.
+Dado que un administrador de tienda configura logos, redes sociales, eventos o torneos, cuando se genera una nueva imagen de deck, entonces la imagen generada usa los valores configurados que correspondan.
+
+Dado que un administrador configura un torneo, cuando carga un logo de torneo, entonces el logo se almacena como asset permanente y puede asociarse al torneo.
 
 ### AC-011: Login y registro
 
@@ -459,7 +479,7 @@ Dado que `store_admin` o `root` elimina un evento, cuando confirma la acción, e
 
 Dado que un usuario autenticado navega entre pantallas, cuando cambia al modulo de seguridad u otro modulo con mayor contenido vertical, entonces el menu lateral debe conservar su posicion visual sin desplazarse hacia abajo.
 
-Dado que una pantalla solicita seleccionar tienda, logos, tipos de evento o tipos de torneo, cuando el usuario llena el formulario, entonces esos campos deben mostrarse como listas desplegables alimentadas por datos existentes en base de datos y no como campos de texto libre para IDs.
+Dado que una pantalla solicita seleccionar tienda, logos, eventos o torneos, cuando el usuario llena el formulario, entonces esos campos deben mostrarse como listas desplegables alimentadas por datos existentes en base de datos y no como campos de texto libre para IDs.
 
 Dado que un usuario no-root consulta listas desplegables de tienda o assets, cuando el backend responde, entonces solo debe devolver datos de su tienda vinculada.
 
@@ -543,6 +563,8 @@ Dado que el usuario selecciona `Generar imagen`, cuando el backend cachea cartas
 
 Dado que faltan cartas o imagenes durante el cacheo, cuando el usuario intenta generar la imagen, entonces la pantalla `Decks` muestra las dependencias faltantes y no ejecuta la generacion final.
 
+Dado que un deck ya tiene `reviewStatus = CONFIRMED`, cuando se muestra en la tabla de `Decks`, entonces la accion `Revisar` debe estar deshabilitada.
+
 ### AC-050: Layout responsive de aplicacion
 
 Dado que el usuario abre la aplicacion en navegador de escritorio, cuando navega cualquier modulo, entonces la vista usa el ancho disponible del navegador sin limitar el workspace principal a una columna estrecha.
@@ -568,6 +590,34 @@ Dado que un usuario autenticado refresca la aplicacion con F5, cuando la ultima 
 Dado que un usuario autenticado no realiza actividad durante 20 minutos o mas, cuando el frontend evalua la sesion local, entonces cierra la sesion, elimina el token almacenado localmente y vuelve al login.
 
 Dado que un usuario cierra sesion manualmente en una pestana, cuando hay otra pestana de la aplicacion abierta, entonces la otra pestana debe limpiar la sesion local y regresar al login.
+
+### AC-054: Torneos asociados a eventos
+
+Dado que una tienda tiene eventos configurados, cuando se crea o modifica un torneo, entonces el usuario debe seleccionar el evento al que pertenece el torneo.
+
+Dado que un usuario consulta el index autenticado, cuando se listan torneos, entonces cada fila debe mostrar el nombre del torneo como dato principal y el evento asociado como dato secundario.
+
+Dado que un evento esta activo, cuando se crean varios torneos para ese evento, entonces el sistema permite la relacion uno-a-muchos entre evento y torneos.
+
+### AC-055: Resultado de deck controlado
+
+Dado que un usuario carga un deck, cuando selecciona el resultado, entonces el frontend debe mostrar una lista desplegable con `Ganador`, `Segundo Puesto`, `Top 3 - 4` y `Top 8`.
+
+Dado que una solicitud de carga envia un resultado fuera de las opciones permitidas, cuando el backend valida la carga, entonces debe rechazarla con error de validacion.
+
+### AC-056: Cierre manual y automatico de torneo
+
+Dado que un torneo tiene al menos un deck con resultado `Ganador`, cuando el usuario ejecuta `Cerrar torneo`, entonces el backend cambia el torneo a `CLOSED`.
+
+Dado que un torneo tiene exactamente 1 `Ganador`, 1 `Segundo Puesto`, 2 `Top 3 - 4` y 4 `Top 8`, cuando se carga el octavo deck que completa la distribucion, entonces el backend cierra automaticamente el torneo.
+
+Dado que un torneo esta `CLOSED`, cuando un usuario intenta cargar otro deck en ese torneo, entonces el backend rechaza la carga y el frontend no debe ofrecerlo como opcion abierta de carga.
+
+### AC-057: Logo de torneo en imagen generada
+
+Dado que un torneo tiene logo activo configurado, cuando se genera la imagen del deck, entonces el logo del torneo debe renderizarse en la parte superior derecha de la imagen.
+
+Dado que el torneo no tiene logo configurado, cuando se genera la imagen del deck, entonces la imagen conserva el comportamiento de logos disponible sin fallar.
 
 ## 8. Preguntas abiertas
 

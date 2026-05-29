@@ -48,7 +48,7 @@ Sistemas externos como Yu-Gi-Oh! Neuron/Konami, YGOPRODeck, almacenamiento de ar
 - Card.
 - Player.
 - Tournament.
-- TournamentType.
+- TournamentStatus.
 - EventType.
 - Store.
 - StoreBranding.
@@ -70,7 +70,8 @@ Sistemas externos como Yu-Gi-Oh! Neuron/Konami, YGOPRODeck, almacenamiento de ar
 - GenerateDeckImageUseCase.
 - ConfigureStoreBrandingUseCase.
 - ConfigureEventTypesUseCase.
-- ConfigureTournamentTypesUseCase.
+- ConfigureTournamentsUseCase.
+- CloseTournamentUseCase.
 - ConfigureStoreSocialLinksUseCase.
 - RegisterUserUseCase.
 - LoginUserUseCase.
@@ -93,7 +94,7 @@ Sistemas externos como Yu-Gi-Oh! Neuron/Konami, YGOPRODeck, almacenamiento de ar
 - CardRepository.
 - BrandingRepository.
 - EventTypeRepository.
-- TournamentTypeRepository.
+- TournamentRepository.
 - UserRepository.
 - RoleRepository.
 - PermissionRepository.
@@ -111,7 +112,7 @@ Sistemas externos como Yu-Gi-Oh! Neuron/Konami, YGOPRODeck, almacenamiento de ar
 - PostgresCardRepository.
 - PostgresBrandingRepository.
 - PostgresEventTypeRepository.
-- PostgresTournamentTypeRepository.
+- PostgresTournamentRepository.
 - PostgresUserRepository.
 - PostgresRoleRepository.
 - PostgresPermissionRepository.
@@ -132,8 +133,8 @@ Sistemas externos como Yu-Gi-Oh! Neuron/Konami, YGOPRODeck, almacenamiento de ar
 - Modal desktop de generacion de imagen, cacheo, previsualizacion y descarga.
 - Vista mobile completa para revision y generacion cuando el viewport no permite modales ergonomicos.
 - Página de configuración de tienda.
-- Página de configuración de tipos de eventos.
-- Página de configuración de tipos de torneos.
+- Página de configuración de eventos.
+- Página de configuración de torneos.
 - Página de configuración de redes sociales.
 - Página de login.
 - Página de registro.
@@ -146,7 +147,7 @@ Sistemas externos como Yu-Gi-Oh! Neuron/Konami, YGOPRODeck, almacenamiento de ar
 
 ## 5. Flujo principal
 
-1. El operador sube una imagen de deck list como evidencia, metadatos obligatorios y link Neuron.
+1. El operador sube una imagen de deck list como evidencia, torneo seleccionado, resultado controlado, metadatos obligatorios y link Neuron.
 2. El backend valida metadatos, restricciones del archivo y dominio del link Neuron.
 3. El backend almacena la imagen en el volumen local de imagenes.
 4. El backend consulta el link Neuron y sigue redirecciones validas hacia Konami.
@@ -159,7 +160,8 @@ Sistemas externos como Yu-Gi-Oh! Neuron/Konami, YGOPRODeck, almacenamiento de ar
 11. El backend persiste la composicion final del deck.
 12. El backend renderiza la imagen del deck con branding.
 13. El backend almacena la imagen generada en el volumen local de imagenes.
-14. El frontend muestra previsualizacion y accion de descarga local dentro de `Decks`.
+14. El backend cierra automaticamente el torneo si la carga completa 1 `Ganador`, 1 `Segundo Puesto`, 2 `Top 3 - 4` y 4 `Top 8`.
+15. El frontend muestra previsualizacion y accion de descarga local dentro de `Decks`.
 
 ## 5.1 Flujo de experiencia responsive en Decks
 
@@ -286,14 +288,20 @@ Las entidades con alcance de tienda incluyen:
 - created_at.
 - updated_at.
 
-### tournament_types
+### tournaments
 
 - id.
 - store_id.
+- event_type_id.
 - name.
 - description.
 - logo_asset_id.
-- is_active.
+- event_date.
+- location.
+- status. Valores: `OPEN`, `CLOSED`.
+- closed_at.
+- closed_by_user_id.
+- closure_reason.
 - created_at.
 - updated_at.
 
@@ -301,18 +309,6 @@ Las entidades con alcance de tienda incluyen:
 
 - id.
 - display_name.
-- created_at.
-- updated_at.
-
-### tournaments
-
-- id.
-- store_id.
-- event_type_id.
-- tournament_type_id.
-- name.
-- event_date.
-- location.
 - created_at.
 - updated_at.
 
@@ -420,9 +416,11 @@ Los contratos finales de API estan documentados en `specs/api-contract.md`. Endp
 - `GET /api/stores/{storeId}/event-types`
 - `POST /api/stores/{storeId}/event-types`
 - `PUT /api/stores/{storeId}/event-types/{eventTypeId}`
-- `GET /api/stores/{storeId}/tournament-types`
-- `POST /api/stores/{storeId}/tournament-types`
-- `PUT /api/stores/{storeId}/tournament-types/{tournamentTypeId}`
+- `GET /api/stores/{storeId}/tournaments`
+- `GET /api/stores/tournaments`
+- `POST /api/stores/{storeId}/tournaments`
+- `PUT /api/stores/{storeId}/tournaments/{tournamentId}`
+- `POST /api/stores/{storeId}/tournaments/{tournamentId}/close`
 - `GET /api/stores/{storeId}/social-links`
 - `PUT /api/stores/{storeId}/social-links`
 - `POST /api/auth/register`
@@ -449,19 +447,38 @@ El módulo de tiendas debe permitir:
 
 - consultar y actualizar branding de tienda;
 - subir logos, iconos y fondos como assets permanentes;
-- configurar tipos de eventos por tienda;
-- configurar tipos de torneos por tienda;
+- configurar eventos por tienda;
+- configurar torneos por tienda y asociarlos a un evento;
 - reemplazar la lista de redes sociales por tienda.
 
 Reglas:
 
 - Logos primario y secundario de tienda usan assets `store_logo`.
 - Fondos propios usan assets `background_image`.
-- Logos de eventos y tipos de torneos usan assets `event_logo`.
+- Logos de eventos usan assets `event_logo`.
+- Logos de torneos usan assets `tournament_logo`.
 - Iconos de redes sociales usan assets `social_logo`.
 - Todos los assets configurables usan política `permanent`.
 - Los updates de eventos, torneos y redes siempre filtran por `store_id`.
 - La generación de imagen consume estos valores desde PostgreSQL y nunca desde datos hardcodeados.
+
+## 7.2 Diseño de torneos y cierre
+
+Los eventos (`EventType`) son catalogos de variedades de torneo de una tienda y permanecen activos/inactivos para controlar disponibilidad.
+
+Los torneos (`Tournament`) son instancias operativas asociadas a un evento. Un evento puede tener muchos torneos, pero cada torneo pertenece a un solo evento.
+
+Reglas:
+
+- La pantalla inicial autenticada lista torneos visibles, no eventos.
+- Cada torneo muestra nombre como dato principal y evento asociado como dato secundario.
+- Cada torneo tiene estado `OPEN` o `CLOSED`.
+- La carga de deck selecciona un torneo abierto existente.
+- El resultado de deck se limita a `Ganador`, `Segundo Puesto`, `Top 3 - 4` y `Top 8`.
+- El cierre manual se permite cuando el torneo tiene al menos un deck `Ganador`.
+- El cierre automatico se ejecuta despues de cargar deck cuando la distribucion del torneo sea exactamente 1 `Ganador`, 1 `Segundo Puesto`, 2 `Top 3 - 4` y 4 `Top 8`.
+- Un torneo cerrado bloquea nuevas cargas.
+- El logo de torneo se almacena como asset permanente y se renderiza en la parte superior derecha de la imagen generada.
 
 ## 8. Diseño de generación de imagen
 
@@ -478,6 +495,8 @@ La plantilla por defecto debe soportar:
 - Área inferior con redes sociales y fuente/crédito.
 
 El renderer debe recibir datos estructurados del deck y configuración de branding. No debe consultar APIs externas directamente.
+
+Si el torneo tiene logo activo, el renderer debe dibujarlo en el slot superior derecho. Ese logo tiene prioridad visual sobre logos heredados de evento en esa posicion.
 
 La grilla del Main Deck debe adaptar columnas y tamaño de carta para renderizar decks legales completos, incluyendo Main Deck de 40 a 60 cartas, sin truncar cartas expandidas por cantidad. Extra Deck y Side Deck deben renderizar hasta 15 cartas cada uno.
 
@@ -566,8 +585,8 @@ Reglas de navegación frontend:
 - Mientras `mustChangePassword = true`, la UI debe bloquear el resto de módulos y mostrar únicamente el formulario de cambio de contraseña.
 - `Registro` solo debe mostrarse después de iniciar sesión y únicamente para `root`.
 - Los usuarios no-root no deben ver la opción `Registro`, incluso si el backend rechazaría la operación por permisos.
-- Después de iniciar sesión, la vista por defecto debe ser el index de eventos configurados.
-- El index de eventos debe listar eventos filtrados por la tienda del usuario no-root; `root` puede ver eventos de todas las tiendas.
+- Después de iniciar sesión, la vista por defecto debe ser el index de torneos configurados.
+- El index de torneos debe listar torneos filtrados por la tienda del usuario no-root; `root` puede ver torneos de todas las tiendas.
 - La navegación autenticada no debe exponer un menu separado de `Imagen`; la generacion y previsualizacion viven dentro de `Decks`.
 - `operator`, `store_admin` y `root` pueden crear y modificar eventos dentro de su alcance.
 - La eliminación de eventos debe ser soft delete mediante inactivación (`isActive = false`) y solo debe estar disponible para `store_admin` y `root`.
@@ -575,8 +594,8 @@ Reglas de navegación frontend:
 Reglas de seleccion de datos relacionados en frontend:
 
 - El menu lateral debe mantenerse fijo en la parte superior de la pantalla autenticada y no debe desplazarse hacia abajo cuando una vista tenga mas contenido vertical.
-- Los campos que referencian entidades persistidas deben ser listas desplegables alimentadas por API: tienda, logos/assets configurables, tipos de evento y tipos de torneo.
-- Los formularios no deben permitir digitar manualmente IDs de tienda, assets, tipos de evento o tipos de torneo.
+- Los campos que referencian entidades persistidas deben ser listas desplegables alimentadas por API: tienda, logos/assets configurables, eventos y torneos.
+- Los formularios no deben permitir digitar manualmente IDs de tienda, assets, eventos o torneos.
 - Las listas desplegables de tienda y assets deben respetar el aislamiento multi-tienda: `root` puede listar todas las tiendas; usuarios no-root solo reciben su tienda y sus assets.
 - La configuracion de tienda debe soportar modo de creacion para `root`; si no existen tiendas, no debe exigir seleccion previa y debe crear la primera tienda desde el formulario.
 - En configuracion de tienda, el campo `sourceCreditText` debe mostrarse como `Credito inferior` o `Fuente del deck list`; no representa el encabezado principal de la imagen.

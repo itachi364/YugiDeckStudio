@@ -80,8 +80,39 @@ async function queueSecurityLists() {
     .mockResolvedValueOnce(await mockJsonResponse([{ id: "store-id", name: "Ready For Duel" }]));
 }
 
-async function queueVisibleEventTypes(events: unknown[] = []) {
-  fetchMock.mockResolvedValueOnce(await mockJsonResponse(events));
+function openTournamentSummary(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "tournament-id",
+    storeId: "store-id",
+    store: {
+      id: "store-id",
+      name: "Ready For Duel"
+    },
+    eventTypeId: "event-type-id",
+    eventType: {
+      id: "event-type-id",
+      name: "Evento Mensual YugiOh"
+    },
+    name: "Torneo Mes de Abril",
+    description: "Top local",
+    logoAssetId: null,
+    eventDate: "2026-05-21T00:00:00.000Z",
+    location: "Bogota",
+    status: "OPEN",
+    decks: [],
+    _count: {
+      decks: 0
+    },
+    ...overrides
+  };
+}
+
+async function queueVisibleTournaments(tournaments: unknown[] = []) {
+  fetchMock.mockResolvedValueOnce(await mockJsonResponse(tournaments));
+}
+
+async function queueTournamentList(tournaments: unknown[] = [openTournamentSummary()]) {
+  fetchMock.mockResolvedValueOnce(await mockJsonResponse(tournaments));
 }
 
 async function queueStoreList(stores: unknown[] = [{ id: "store-id", name: "Ready For Duel" }]) {
@@ -101,6 +132,9 @@ async function loginAndOpenDecks(
       storeName: "Ready For Duel",
       playerName: "Operator",
       deckName: "White Forest",
+      tournamentId: "tournament-id",
+      tournamentName: "Torneo Mes de Abril",
+      tournamentStatus: "OPEN",
       resultLabel: "Top 8",
       tournamentDate: "2026-05-21T00:00:00.000Z",
       status: "EXTRACTED",
@@ -126,11 +160,10 @@ async function loginAndOpenDecks(
       }
     })
   );
-  await queueVisibleEventTypes();
+  await queueVisibleTournaments();
   await queueStoreList();
   fetchMock.mockResolvedValueOnce(await mockJsonResponse(decks));
-  fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
-  fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
+  await queueTournamentList();
 
   renderApp();
 
@@ -158,7 +191,7 @@ async function loginAndOpenStoreConfiguration(user: ReturnType<typeof userEvent.
       }
     })
   );
-  await queueVisibleEventTypes();
+  await queueVisibleTournaments();
   await queueStoreList();
 
   renderApp();
@@ -187,7 +220,7 @@ async function loginAndOpenCatalogs(user: ReturnType<typeof userEvent.setup>) {
       }
     })
   );
-  await queueVisibleEventTypes();
+  await queueVisibleTournaments();
   await queueStoreList();
 
   renderApp();
@@ -263,7 +296,7 @@ describe("App", () => {
         }
       })
     );
-    await queueVisibleEventTypes();
+    await queueVisibleTournaments();
     await queueStoreList();
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse({
@@ -327,7 +360,7 @@ describe("App", () => {
         mustChangePassword: false
       })
     );
-    await queueVisibleEventTypes();
+    await queueVisibleTournaments();
 
     renderApp();
 
@@ -379,7 +412,7 @@ describe("App", () => {
         }
       })
     );
-    await queueVisibleEventTypes();
+    await queueVisibleTournaments();
     await queueSecurityLists();
 
     renderApp();
@@ -418,7 +451,7 @@ describe("App", () => {
         }
       })
     );
-    await queueVisibleEventTypes();
+    await queueVisibleTournaments();
 
     renderApp();
 
@@ -452,20 +485,20 @@ describe("App", () => {
         }
       })
     );
-    await queueVisibleEventTypes();
+    await queueVisibleTournaments();
 
     await user.type(screen.getByLabelText(/usuario/i), "root");
     await user.type(screen.getByLabelText(/contrasena/i), "ChangedPassword123!");
     await user.click(screen.getByRole("button", { name: /entrar/i }));
 
-    expect(await screen.findByRole("heading", { name: /eventos configurados/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /torneos configurados/i })).toBeInTheDocument();
     expect(localStorage.getItem("yugideckstudio.session")).toContain("jwt-token");
 
     firstRender.unmount();
-    await queueVisibleEventTypes();
+    await queueVisibleTournaments();
     renderApp();
 
-    expect(await screen.findByRole("heading", { name: /eventos configurados/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /torneos configurados/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /decks/i })).toBeInTheDocument();
     expect(screen.queryByRole("form", { name: /login local/i })).not.toBeInTheDocument();
   });
@@ -512,7 +545,7 @@ describe("App", () => {
         }
       })
     );
-    await queueVisibleEventTypes();
+    await queueVisibleTournaments();
     await queueSecurityLists();
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse({
@@ -586,16 +619,7 @@ describe("App", () => {
         }
       })
     );
-    await queueVisibleEventTypes([
-      {
-        id: "event-type-id",
-        storeId: "store-id",
-        name: "Regional",
-        description: "WCQ Regional",
-        logoAssetId: null,
-        isActive: true
-      }
-    ]);
+    await queueVisibleTournaments([openTournamentSummary({ name: "Torneo Regional", eventType: { id: "event-type-id", name: "Regional" } })]);
 
     renderApp();
 
@@ -603,18 +627,18 @@ describe("App", () => {
     await user.type(screen.getByLabelText(/contrasena/i), "Operator123!");
     await user.click(screen.getByRole("button", { name: /entrar/i }));
 
-    expect(await screen.findByRole("heading", { name: /eventos configurados/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /torneos configurados/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /registro/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /seguridad/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/^regional$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^torneo regional$/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /eliminar/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /eventos/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /torneos/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /decks/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /revision/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^imagen$/i })).not.toBeInTheDocument();
   });
 
-  it("loads the configured events index after login", async () => {
+  it("loads the configured tournaments index after login", async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse({
@@ -631,16 +655,7 @@ describe("App", () => {
         }
       })
     );
-    await queueVisibleEventTypes([
-      {
-        id: "event-type-id",
-        storeId: "store-id",
-        name: "Regional",
-        description: "WCQ Regional",
-        logoAssetId: null,
-        isActive: true
-      }
-    ]);
+    await queueVisibleTournaments([openTournamentSummary()]);
 
     renderApp();
 
@@ -648,12 +663,12 @@ describe("App", () => {
     await user.type(screen.getByLabelText(/contrasena/i), "Operator123!");
     await user.click(screen.getByRole("button", { name: /entrar/i }));
 
-    expect(await screen.findByRole("heading", { name: /eventos configurados/i })).toBeInTheDocument();
-    expect(screen.getByText(/eventos visibles/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /torneos configurados/i })).toBeInTheDocument();
+    expect(screen.getByText(/torneos visibles/i)).toBeInTheDocument();
     expect(screen.getByText("1")).toBeInTheDocument();
-    expect(screen.getByText(/wcq regional/i)).toBeInTheDocument();
+    expect(screen.getByText(/torneo mes de abril/i)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/stores/event-types",
+      "/api/stores/tournaments",
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: "Bearer operator-token"
@@ -662,7 +677,7 @@ describe("App", () => {
     );
   });
 
-  it("lets operators create and modify events without exposing delete", async () => {
+  it("lets operators close tournaments when a winner deck exists", async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse({
@@ -679,39 +694,20 @@ describe("App", () => {
         }
       })
     );
-    await queueVisibleEventTypes([
-      {
-        id: "event-type-id",
-        storeId: "store-id",
-        name: "Regional",
-        description: "WCQ Regional",
-        logoAssetId: null,
-        isActive: true
-      }
+    await queueVisibleTournaments([
+      openTournamentSummary({
+        decks: [{ resultLabel: "Ganador" }],
+        _count: { decks: 1 }
+      })
     ]);
-    await queueStoreList();
-    await queueStoreAssets([{ id: "event-logo-id", category: "EVENT_LOGO", originalFilename: "regional.png", storagePath: "event-logos/regional.png" }]);
     fetchMock.mockResolvedValueOnce(
-      await mockJsonResponse({
-        id: "event-type-created",
-        storeId: "store-id",
-        name: "Premiere",
-        description: "Premiere local",
-        logoAssetId: "event-logo-id",
-        isActive: true
-      })
-    );
-    await queueStoreList();
-    await queueStoreAssets([]);
-    fetchMock.mockResolvedValueOnce(
-      await mockJsonResponse({
-        id: "event-type-id",
-        storeId: "store-id",
-        name: "Regional WCQ",
-        description: "Regional actualizado",
-        logoAssetId: null,
-        isActive: true
-      })
+      await mockJsonResponse(
+        openTournamentSummary({
+          status: "CLOSED",
+          decks: [{ resultLabel: "Ganador" }],
+          _count: { decks: 1 }
+        })
+      )
     );
 
     renderApp();
@@ -719,53 +715,25 @@ describe("App", () => {
     await user.type(screen.getByLabelText(/usuario/i), "operator");
     await user.type(screen.getByLabelText(/contrasena/i), "Operator123!");
     await user.click(screen.getByRole("button", { name: /entrar/i }));
-    await screen.findByRole("heading", { name: /eventos configurados/i });
+    await screen.findByRole("heading", { name: /torneos configurados/i });
 
     expect(screen.queryByRole("button", { name: /eliminar/i })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /crear evento/i }));
-    await user.type(screen.getByLabelText(/^nombre$/i), "Premiere");
-    await user.type(screen.getByLabelText(/^descripcion$/i), "Premiere local");
-    await user.selectOptions(screen.getByLabelText(/^logo$/i), "event-logo-id");
-    await user.click(screen.getByRole("button", { name: /guardar evento/i }));
+    await user.click(screen.getByRole("button", { name: /cerrar torneo/i }));
 
-    expect(await screen.findByText(/evento premiere creado/i)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/stores/store-id/event-types",
+      "/api/stores/store-id/tournaments/tournament-id/close",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({
-          name: "Premiere",
-          description: "Premiere local",
-          logoAssetId: "event-logo-id",
-          isActive: true
+        headers: expect.objectContaining({
+          Authorization: "Bearer operator-token"
         })
       })
     );
-
-    await user.click(screen.getAllByRole("button", { name: /modificar/i })[0]);
-    await user.clear(screen.getByLabelText(/^nombre$/i));
-    await user.type(screen.getByLabelText(/^nombre$/i), "Regional WCQ");
-    await user.clear(screen.getByLabelText(/^descripcion$/i));
-    await user.type(screen.getByLabelText(/^descripcion$/i), "Regional actualizado");
-    await user.click(screen.getByRole("button", { name: /guardar evento/i }));
-
-    expect(await screen.findByText(/evento regional wcq actualizado/i)).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/stores/store-id/event-types/event-type-id",
-      expect.objectContaining({
-        method: "PUT",
-        body: JSON.stringify({
-          name: "Regional WCQ",
-          description: "Regional actualizado",
-          logoAssetId: null,
-          isActive: true
-        })
-      })
-    );
+    expect(await screen.findByText(/torneo torneo mes de abril cerrado/i)).toBeInTheDocument();
   });
 
-  it("lets root see all stores and soft delete events", async () => {
+  it("lets root see tournaments from all stores", async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse({
@@ -782,42 +750,20 @@ describe("App", () => {
         }
       })
     );
-    await queueVisibleEventTypes([
-      {
-        id: "event-type-a",
+    await queueVisibleTournaments([
+      openTournamentSummary({
+        id: "tournament-a",
         storeId: "store-a",
-        store: {
-          id: "store-a",
-          name: "Ready For Duel"
-        },
-        name: "Regional",
-        description: "WCQ Regional",
-        logoAssetId: null,
-        isActive: true
-      },
-      {
-        id: "event-type-b",
+        store: { id: "store-a", name: "Ready For Duel" },
+        name: "Torneo Regional"
+      }),
+      openTournamentSummary({
+        id: "tournament-b",
         storeId: "store-b",
-        store: {
-          id: "store-b",
-          name: "Yugi Local"
-        },
-        name: "Premiere",
-        description: "Premiere local",
-        logoAssetId: null,
-        isActive: true
-      }
-    ]);
-    fetchMock.mockResolvedValueOnce(
-      await mockJsonResponse({
-        id: "event-type-a",
-        storeId: "store-a",
-        name: "Regional",
-        description: "WCQ Regional",
-        logoAssetId: null,
-        isActive: false
+        store: { id: "store-b", name: "Yugi Local" },
+        name: "Torneo Premiere"
       })
-    );
+    ]);
 
     renderApp();
 
@@ -828,20 +774,8 @@ describe("App", () => {
     expect(await screen.findByText(/ready for duel/i)).toBeInTheDocument();
     expect(screen.getByText(/yugi local/i)).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument();
-
-    await user.click(screen.getAllByRole("button", { name: /eliminar/i })[0]);
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/stores/store-a/event-types/event-type-a",
-      expect.objectContaining({
-        method: "DELETE",
-        headers: expect.objectContaining({
-          Authorization: "Bearer jwt-token"
-        })
-      })
-    );
-    expect(await screen.findByText(/evento regional inactivado/i)).toBeInTheDocument();
-    expect(screen.getByText(/inactivo/i)).toBeInTheDocument();
+    expect(screen.getByText(/torneo regional/i)).toBeInTheDocument();
+    expect(screen.getByText(/torneo premiere/i)).toBeInTheDocument();
   });
 
   it("uploads a deck list image with required metadata", async () => {
@@ -862,11 +796,10 @@ describe("App", () => {
         }
       })
     );
-    await queueVisibleEventTypes();
+    await queueVisibleTournaments();
     await queueStoreList();
     fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
-    fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
-    fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
+    await queueTournamentList();
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse({
         deckId: "deck-id",
@@ -887,6 +820,9 @@ describe("App", () => {
           storeName: "Ready For Duel",
           playerName: "Kaihuang Zhang",
           deckName: "White Forest",
+          tournamentId: "tournament-id",
+          tournamentName: "Torneo Mes de Abril",
+          tournamentStatus: "OPEN",
           resultLabel: "Top 8",
           tournamentDate: "2026-05-21T00:00:00.000Z",
           status: "EXTRACTED",
@@ -908,11 +844,10 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: /carga de deck/i })).toBeInTheDocument();
 
     await user.type(screen.getByLabelText(/jugador/i), "Kaihuang Zhang");
-    await user.type(screen.getByLabelText(/fecha del torneo/i), "2026-05-21");
-    await user.type(screen.getByLabelText(/resultado/i), "Top 8");
+    await user.selectOptions(screen.getByLabelText(/resultado/i), "Top 8");
+    await user.selectOptions(screen.getByLabelText(/^torneo$/i), "tournament-id");
     await user.type(screen.getByLabelText(/deck usado/i), "White Forest");
     await user.type(screen.getByLabelText(/link neuron/i), "https://neuron.konami.net/link/6omm271xgfka1d95");
-    await user.type(screen.getByLabelText(/^torneo$/i), "Regional");
     await user.upload(screen.getByLabelText(/imagen deck list/i), deckImage);
     await user.click(screen.getByRole("button", { name: /cargar deck/i }));
 
@@ -934,7 +869,7 @@ describe("App", () => {
     const body = uploadCall?.[1]?.body as FormData;
     expect(body.get("storeId")).toBe("store-id");
     expect(body.get("playerName")).toBe("Kaihuang Zhang");
-    expect(body.get("tournamentDate")).toBe("2026-05-21");
+    expect(body.get("tournamentId")).toBe("tournament-id");
     expect(body.get("resultLabel")).toBe("Top 8");
     expect(body.get("deckName")).toBe("White Forest");
     expect(body.get("neuronDeckUrl")).toBe("https://neuron.konami.net/link/6omm271xgfka1d95");
@@ -959,11 +894,10 @@ describe("App", () => {
         }
       })
     );
-    await queueVisibleEventTypes();
+    await queueVisibleTournaments();
     await queueStoreList();
     fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
-    fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
-    fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
+    await queueTournamentList();
 
     renderApp();
 
@@ -973,8 +907,8 @@ describe("App", () => {
     await user.click(await screen.findByRole("button", { name: /decks/i }));
 
     await user.type(screen.getByLabelText(/jugador/i), "Kaihuang Zhang");
-    await user.type(screen.getByLabelText(/fecha del torneo/i), "2026-05-21");
-    await user.type(screen.getByLabelText(/resultado/i), "Top 8");
+    await user.selectOptions(screen.getByLabelText(/resultado/i), "Top 8");
+    await user.selectOptions(screen.getByLabelText(/^torneo$/i), "tournament-id");
     await user.type(screen.getByLabelText(/deck usado/i), "White Forest");
     await user.type(screen.getByLabelText(/link neuron/i), "https://neuron.konami.net/link/6omm271xgfka1d95");
     await user.click(screen.getByRole("button", { name: /cargar deck/i }));
@@ -1118,25 +1052,13 @@ describe("App", () => {
     expect(screen.queryByRole("dialog", { name: /revisar deck/i })).not.toBeInTheDocument();
   });
 
-  it("shows confirmed review status and disables confirmation for already reviewed decks", async () => {
+  it("shows confirmed review status and disables review for already reviewed decks", async () => {
     const user = userEvent.setup();
     await loginAndOpenDecks(user, [confirmedDeckSummary()]);
-    fetchMock.mockResolvedValueOnce(
-      await mockJsonResponse({
-        deckId: "deck-id",
-        status: "REVIEWED",
-        extractionStatus: "EXTRACTED",
-        reviewStatus: "CONFIRMED",
-        cards: buildMainDeckCards(40)
-      })
-    );
-
-    await user.click(screen.getByRole("button", { name: /revisar/i }));
-    await screen.findByDisplayValue("Card 1");
 
     expect(screen.getAllByText(/confirmed/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/la revision del deck ya fue confirmada/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /confirmar deck/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /revisar/i })).toBeDisabled();
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/decks/deck-id")).toBe(false);
   });
 
   it("confirms the reviewed deck after opening it from the upload result", async () => {
@@ -1158,13 +1080,12 @@ describe("App", () => {
         }
       })
     );
-    await queueVisibleEventTypes();
+    await queueVisibleTournaments();
     await queueStoreList();
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse([])
     );
-    fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
-    fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
+    await queueTournamentList();
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse({
         deckId: "deck-id",
@@ -1185,6 +1106,9 @@ describe("App", () => {
           storeName: "Ready For Duel",
           playerName: "Operator",
           deckName: "White Forest",
+          tournamentId: "tournament-id",
+          tournamentName: "Torneo Mes de Abril",
+          tournamentStatus: "OPEN",
           resultLabel: "Top 8",
           tournamentDate: "2026-05-21T00:00:00.000Z",
           status: "EXTRACTED",
@@ -1220,8 +1144,8 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: /entrar/i }));
     await user.click(await screen.findByRole("button", { name: /decks/i }));
     await user.type(screen.getByLabelText(/jugador/i), "Operator");
-    await user.type(screen.getByLabelText(/fecha del torneo/i), "2026-05-21");
-    await user.type(screen.getByLabelText(/resultado/i), "Top 8");
+    await user.selectOptions(screen.getByLabelText(/resultado/i), "Top 8");
+    await user.selectOptions(screen.getByLabelText(/^torneo$/i), "tournament-id");
     await user.type(screen.getByLabelText(/deck usado/i), "White Forest");
     await user.type(screen.getByLabelText(/link neuron/i), "https://neuron.konami.net/link/6omm271xgfka1d95");
     await user.upload(screen.getByLabelText(/imagen deck list/i), deckImage);
@@ -1368,7 +1292,7 @@ describe("App", () => {
         }
       })
     );
-    await queueVisibleEventTypes();
+    await queueVisibleTournaments();
     await queueStoreList([]);
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse({
@@ -1478,7 +1402,7 @@ describe("App", () => {
     expect(await screen.findByText(/background_image cargado como asset permanente/i)).toBeInTheDocument();
   });
 
-  it("loads event types, tournament types and social links", async () => {
+  it("loads events, tournaments and social links", async () => {
     const user = userEvent.setup();
     await loginAndOpenCatalogs(user);
     fetchMock.mockResolvedValueOnce(
@@ -1496,12 +1420,17 @@ describe("App", () => {
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse([
         {
-          id: "tournament-type-id",
+          id: "tournament-id",
           storeId: "store-id",
-          name: "Local",
+          eventTypeId: "event-type-id",
+          eventType: { id: "event-type-id", name: "Regional" },
+          name: "Torneo Local",
           description: "Torneo semanal",
           logoAssetId: null,
-          isActive: true
+          eventDate: "2026-05-21T00:00:00.000Z",
+          status: "OPEN",
+          decks: [],
+          _count: { decks: 0 }
         }
       ])
     );
@@ -1521,6 +1450,7 @@ describe("App", () => {
     await queueStoreAssets([
       { id: "event-logo-id", category: "EVENT_LOGO", originalFilename: "regional.png", storagePath: "event-logos/regional.png" }
     ]);
+    await queueStoreAssets([]);
     await queueStoreAssets([
       { id: "social-logo-id", category: "SOCIAL_LOGO", originalFilename: "instagram.png", storagePath: "social-logos/instagram.png" }
     ]);
@@ -1529,7 +1459,7 @@ describe("App", () => {
 
     expect(await screen.findByText(/catalogos de tienda cargados/i)).toBeInTheDocument();
     expect(screen.getByText(/wcq regional/i)).toBeInTheDocument();
-    expect(screen.getByText(/torneo semanal/i)).toBeInTheDocument();
+    expect(screen.getByText(/torneo local/i)).toBeInTheDocument();
     expect(screen.getByDisplayValue(/@readyforduel/i)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/stores/store-id/event-types",
@@ -1540,7 +1470,7 @@ describe("App", () => {
       })
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/stores/store-id/tournament-types",
+      "/api/stores/store-id/tournaments",
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: "Bearer admin-token"
@@ -1557,7 +1487,7 @@ describe("App", () => {
     );
   });
 
-  it("creates event and tournament types", async () => {
+  it("creates events and tournaments", async () => {
     const user = userEvent.setup();
     await loginAndOpenCatalogs(user);
     fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
@@ -1566,6 +1496,7 @@ describe("App", () => {
     await queueStoreAssets([
       { id: "event-logo-id", category: "EVENT_LOGO", originalFilename: "regional.png", storagePath: "event-logos/regional.png" }
     ]);
+    await queueStoreAssets([]);
     await queueStoreAssets([]);
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse({
@@ -1579,12 +1510,17 @@ describe("App", () => {
     );
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse({
-        id: "tournament-type-id",
+        id: "tournament-id",
         storeId: "store-id",
-        name: "Local",
+        eventTypeId: "event-type-id",
+        name: "Torneo Local",
         description: "Torneo semanal",
         logoAssetId: null,
-        isActive: true
+        eventDate: "2026-05-21T00:00:00.000Z",
+        location: "Bogota",
+        status: "OPEN",
+        decks: [],
+        _count: { decks: 0 }
       })
     );
 
@@ -1596,17 +1532,20 @@ describe("App", () => {
     await user.selectOptions(screen.getByLabelText(/evento logo/i), "event-logo-id");
     await user.click(screen.getByRole("button", { name: /crear evento/i }));
 
-    await user.type(screen.getByLabelText(/torneo nombre/i), "Local");
+    await user.selectOptions(screen.getByLabelText(/^evento$/i), "event-type-id");
+    await user.type(screen.getByLabelText(/torneo nombre/i), "Torneo Local");
     await user.type(screen.getByLabelText(/torneo descripcion/i), "Torneo semanal");
+    await user.type(screen.getByLabelText(/^fecha$/i), "2026-05-21");
+    await user.type(screen.getByLabelText(/ubicacion/i), "Bogota");
     await user.click(screen.getByRole("button", { name: /crear torneo/i }));
 
     await waitFor(() => {
       expect(fetchMock.mock.calls.some(([url, options]) => url === "/api/stores/store-id/event-types" && options?.method === "POST")).toBe(true);
-      expect(fetchMock.mock.calls.some(([url, options]) => url === "/api/stores/store-id/tournament-types" && options?.method === "POST")).toBe(true);
+      expect(fetchMock.mock.calls.some(([url, options]) => url === "/api/stores/store-id/tournaments" && options?.method === "POST")).toBe(true);
     });
 
     const eventCall = fetchMock.mock.calls.find(([url, options]) => url === "/api/stores/store-id/event-types" && options?.method === "POST");
-    const tournamentCall = fetchMock.mock.calls.find(([url, options]) => url === "/api/stores/store-id/tournament-types" && options?.method === "POST");
+    const tournamentCall = fetchMock.mock.calls.find(([url, options]) => url === "/api/stores/store-id/tournaments" && options?.method === "POST");
     expect(eventCall?.[1]).toEqual(
       expect.objectContaining({
         method: "POST",
@@ -1622,14 +1561,16 @@ describe("App", () => {
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
-          name: "Local",
+          eventTypeId: "event-type-id",
+          name: "Torneo Local",
           description: "Torneo semanal",
           logoAssetId: null,
-          isActive: true
+          eventDate: "2026-05-21",
+          location: "Bogota"
         })
       })
     );
-    expect(await screen.findByText(/tipo de torneo local creado/i)).toBeInTheDocument();
+    expect(await screen.findByText(/torneo torneo local creado/i)).toBeInTheDocument();
   });
 
   it("replaces store social links", async () => {
@@ -1650,6 +1591,7 @@ describe("App", () => {
         }
       ])
     );
+    await queueStoreAssets([]);
     await queueStoreAssets([]);
     await queueStoreAssets([
       { id: "social-logo-id", category: "SOCIAL_LOGO", originalFilename: "instagram.png", storagePath: "social-logos/instagram.png" }
@@ -1858,6 +1800,9 @@ function confirmedDeckSummary() {
     storeName: "Ready For Duel",
     playerName: "Operator",
     deckName: "White Forest",
+    tournamentId: "tournament-id",
+    tournamentName: "Torneo Mes de Abril",
+    tournamentStatus: "OPEN",
     resultLabel: "Top 8",
     tournamentDate: "2026-05-21T00:00:00.000Z",
     status: "REVIEWED",

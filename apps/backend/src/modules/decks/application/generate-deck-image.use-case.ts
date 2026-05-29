@@ -71,6 +71,7 @@ export class GenerateDeckImageUseCase {
       tournamentName: deck.tournament.name ?? undefined,
       eventTypeName: deck.tournament.eventType?.name,
       tournamentTypeName: deck.tournament.tournamentType?.name,
+      tournamentLogoPath: this.resolveOptionalAssetPath(deck.tournament.logoAsset),
       sourceCreditText: deck.store.sourceCreditText ?? undefined,
       backgroundColor: deck.store.backgroundColor ?? undefined,
       backgroundImagePath: this.resolveOptionalAssetPath(deck.store.backgroundImageAsset),
@@ -165,6 +166,12 @@ export class GenerateDeckImageUseCase {
           select: {
             name: true,
             eventDate: true,
+            logoAsset: {
+              select: {
+                storagePath: true,
+                deletedAt: true
+              }
+            },
             eventType: {
               select: {
                 name: true,

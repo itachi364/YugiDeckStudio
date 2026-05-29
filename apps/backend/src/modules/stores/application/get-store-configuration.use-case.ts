@@ -32,6 +32,24 @@ export class GetStoreConfigurationUseCase {
           orderBy: {
             name: "asc"
           }
+        },
+        tournaments: {
+          orderBy: [
+            {
+              eventDate: "desc"
+            },
+            {
+              name: "asc"
+            }
+          ],
+          include: {
+            eventType: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
         }
       }
     });

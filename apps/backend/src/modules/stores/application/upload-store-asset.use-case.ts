@@ -24,6 +24,7 @@ export class UploadStoreAssetUseCase {
   private readonly allowedCategories = new Set<ImageAssetCategory>([
     ImageAssetCategory.STORE_LOGO,
     ImageAssetCategory.EVENT_LOGO,
+    ImageAssetCategory.TOURNAMENT_LOGO,
     ImageAssetCategory.SOCIAL_LOGO,
     ImageAssetCategory.BACKGROUND_IMAGE
   ]);

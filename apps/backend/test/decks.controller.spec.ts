@@ -40,8 +40,8 @@ describe("DecksController", () => {
   const body = {
     storeId: "store-id",
     playerName: "Michael Vanegas",
-    tournamentDate: "2026-04-26",
-    resultLabel: "Top 4",
+    tournamentId: "tournament-id",
+    resultLabel: "Top 3 - 4",
     deckName: "White Forest",
     neuronDeckUrl: "https://neuron.konami.net/link/6omm271xgfka1d95"
   };

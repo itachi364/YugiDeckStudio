@@ -32,6 +32,11 @@ enum DeckStatus {
   INACTIVE
 }
 
+enum TournamentStatus {
+  OPEN
+  CLOSED
+}
+
 enum ResolutionStatus {
   UNRESOLVED
   RESOLVED
@@ -44,6 +49,7 @@ enum ImageAssetCategory {
   CARD_IMAGE
   STORE_LOGO
   EVENT_LOGO
+  TOURNAMENT_LOGO
   SOCIAL_LOGO
   BACKGROUND_IMAGE
 }
@@ -142,6 +148,7 @@ model User {
   store              Store?   @relation(fields: [storeId], references: [id])
   userRoles          UserRole[]
   inactiveDecks      Deck[]   @relation("DeckInactivatedBy")
+  closedTournaments  Tournament[] @relation("TournamentClosedBy")
 
   @@index([storeId])
 }
@@ -203,14 +210,22 @@ model Tournament {
   eventTypeId      String?
   tournamentTypeId String?
   name             String?
+  description      String?
+  logoAssetId      String?
   eventDate        DateTime
   location         String?
+  status           TournamentStatus @default(OPEN)
+  closedAt         DateTime?
+  closedByUserId   String?
+  closureReason    String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
   store          Store           @relation(fields: [storeId], references: [id])
   eventType      EventType?      @relation(fields: [eventTypeId], references: [id])
   tournamentType TournamentType? @relation(fields: [tournamentTypeId], references: [id])
+  logoAsset      ManagedImageAsset? @relation("TournamentLogo", fields: [logoAssetId], references: [id])
+  closedByUser   User?           @relation("TournamentClosedBy", fields: [closedByUserId], references: [id])
   decks          Deck[]
 
   @@index([storeId])
@@ -317,6 +332,7 @@ model ManagedImageAsset {
   socialIcons           StoreSocialLink[]    @relation("SocialIcon")
   eventLogos            EventType[]          @relation("EventLogo")
   tournamentTypeLogos   TournamentType[]     @relation("TournamentTypeLogo")
+  tournamentLogos       Tournament[]         @relation("TournamentLogo")
   uploadedDecks         Deck[]               @relation("UploadedDeckList")
   cardImages            Card[]               @relation("CardImage")
   generatedDeckImages   GeneratedDeckImage[] @relation("GeneratedDeckImage")

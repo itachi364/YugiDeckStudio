@@ -4,13 +4,15 @@ import {
   ExtractionStatus,
   ImageAssetCategory,
   RetentionPolicy,
-  ReviewStatus
+  ReviewStatus,
+  TournamentStatus
 } from "@prisma/client";
 import { UploadDeckListUseCase } from "../src/modules/decks/application/upload-deck-list.use-case";
 
 describe("UploadDeckListUseCase", () => {
   const findStore = jest.fn();
   const findDeck = jest.fn();
+  const findTournament = jest.fn();
   const transaction = jest.fn();
   const saveUploadedDeckList = jest.fn();
   const removeStoredFile = jest.fn();
@@ -23,6 +25,9 @@ describe("UploadDeckListUseCase", () => {
       },
       deck: {
         findUnique: findDeck
+      },
+      tournament: {
+        findFirst: findTournament
       },
       $transaction: transaction
     } as never,
@@ -47,7 +52,7 @@ describe("UploadDeckListUseCase", () => {
   const validInput = {
     storeId: "7fd4fd87-4e90-4c13-b47f-a0145f123d17",
     playerName: "Kaihuang Zhang",
-    tournamentDate: "2026-05-21",
+    tournamentId: "0c311ebf-7872-47b1-a531-18d46c5f9e8a",
     resultLabel: "Top 8",
     deckName: "White Forest",
     neuronDeckUrl: "https://neuron.konami.net/link/6omm271xgfka1d95",
@@ -64,6 +69,7 @@ describe("UploadDeckListUseCase", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     findStore.mockResolvedValue({ id: validInput.storeId });
+    findTournament.mockResolvedValue({ id: validInput.tournamentId, status: TournamentStatus.OPEN });
     saveUploadedDeckList.mockResolvedValue({
       checksum: "checksum",
       storagePath: "uploaded-decklists/deck.png"
@@ -95,13 +101,17 @@ describe("UploadDeckListUseCase", () => {
           create: jest.fn().mockResolvedValue({ id: "player-id" })
         },
         tournament: {
-          create: jest.fn().mockResolvedValue({ id: "tournament-id" })
+          findUniqueOrThrow: jest.fn().mockResolvedValue({
+            status: TournamentStatus.OPEN,
+            decks: [{ resultLabel: "Top 8" }]
+          }),
+          update: jest.fn()
         },
         deck: {
           create: jest.fn().mockResolvedValue({
             id: "deck-id",
             playerId: "player-id",
-            tournamentId: "tournament-id",
+            tournamentId: validInput.tournamentId,
             uploadedImageAssetId: "asset-id",
             status: DeckStatus.EXTRACTED,
             extractionStatus: ExtractionStatus.EXTRACTED,
@@ -161,12 +171,13 @@ describe("UploadDeckListUseCase", () => {
     expect(result).toEqual({
       deckId: "deck-id",
       playerId: "player-id",
-      tournamentId: "tournament-id",
+      tournamentId: validInput.tournamentId,
       uploadedImageAssetId: "asset-id",
       status: DeckStatus.EXTRACTED,
       extractionStatus: ExtractionStatus.EXTRACTED,
       reviewStatus: ReviewStatus.PENDING,
-      importedCardCount: 2
+      importedCardCount: 2,
+      tournamentStatus: TournamentStatus.OPEN
     });
   });
 
@@ -182,13 +193,17 @@ describe("UploadDeckListUseCase", () => {
           create: jest.fn().mockResolvedValue({ id: "player-id" })
         },
         tournament: {
-          create: jest.fn().mockResolvedValue({ id: "tournament-id" })
+          findUniqueOrThrow: jest.fn().mockResolvedValue({
+            status: TournamentStatus.OPEN,
+            decks: [{ resultLabel: "Top 8" }]
+          }),
+          update: jest.fn()
         },
         deck: {
           create: jest.fn().mockResolvedValue({
             id: "deck-id",
             playerId: "player-id",
-            tournamentId: "tournament-id",
+            tournamentId: validInput.tournamentId,
             uploadedImageAssetId: "asset-id",
             status: DeckStatus.EXTRACTED,
             extractionStatus: ExtractionStatus.EXTRACTED,
@@ -212,6 +227,79 @@ describe("UploadDeckListUseCase", () => {
         checksum: "checksum"
       })
     });
+  });
+
+  it("rejects deck uploads into closed tournaments", async () => {
+    findTournament.mockResolvedValue({ id: validInput.tournamentId, status: TournamentStatus.CLOSED });
+
+    await expect(useCase.execute(validInput)).rejects.toBeInstanceOf(ConflictException);
+
+    expect(importDeck).not.toHaveBeenCalled();
+    expect(saveUploadedDeckList).not.toHaveBeenCalled();
+  });
+
+  it("closes the tournament automatically when the full top cut is loaded", async () => {
+    const tournamentUpdate = jest.fn().mockResolvedValue({ status: TournamentStatus.CLOSED });
+
+    transaction.mockImplementation(async (callback) =>
+      callback({
+        managedImageAsset: {
+          create: jest.fn().mockResolvedValue({ id: "asset-id" })
+        },
+        player: {
+          create: jest.fn().mockResolvedValue({ id: "player-id" })
+        },
+        tournament: {
+          findUniqueOrThrow: jest.fn().mockResolvedValue({
+            status: TournamentStatus.OPEN,
+            decks: [
+              { resultLabel: "Ganador" },
+              { resultLabel: "Segundo Puesto" },
+              { resultLabel: "Top 3 - 4" },
+              { resultLabel: "Top 3 - 4" },
+              { resultLabel: "Top 8" },
+              { resultLabel: "Top 8" },
+              { resultLabel: "Top 8" },
+              { resultLabel: "Top 8" }
+            ]
+          }),
+          update: tournamentUpdate
+        },
+        deck: {
+          create: jest.fn().mockResolvedValue({
+            id: "deck-id",
+            playerId: "player-id",
+            tournamentId: validInput.tournamentId,
+            uploadedImageAssetId: "asset-id",
+            status: DeckStatus.EXTRACTED,
+            extractionStatus: ExtractionStatus.EXTRACTED,
+            reviewStatus: ReviewStatus.PENDING
+          })
+        },
+        deckCard: {
+          createMany: jest.fn().mockResolvedValue({ count: 2 })
+        }
+      })
+    );
+
+    const result = await useCase.execute({
+      ...validInput,
+      resultLabel: "Ganador"
+    });
+
+    expect(tournamentUpdate).toHaveBeenCalledWith({
+      where: {
+        id: validInput.tournamentId
+      },
+      data: expect.objectContaining({
+        status: TournamentStatus.CLOSED,
+        closureReason: "AUTO_TOP_CUT_COMPLETE"
+      }),
+      select: {
+        status: true
+      }
+    });
+    expect(result.tournamentStatus).toBe(TournamentStatus.CLOSED);
   });
 
   it("rejects replacing an already uploaded deck list", async () => {

@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Put, Query, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { ImageAssetCategory } from "@prisma/client";
+import { ImageAssetCategory, TournamentStatus } from "@prisma/client";
 import { CurrentUser } from "../auth/infrastructure/current-user.decorator";
 import { JwtAuthGuard } from "../auth/infrastructure/jwt-auth.guard";
 import { RootOnlyGuard } from "../auth/infrastructure/root-only.guard";
@@ -8,6 +8,7 @@ import { StoreScopeGuard } from "../auth/infrastructure/store-scope.guard";
 import { AuthenticatedUserPayload } from "../auth/ports/auth-token.port";
 import { ConfigureEventTypesUseCase } from "./application/configure-event-types.use-case";
 import { ConfigureTournamentTypesUseCase } from "./application/configure-tournament-types.use-case";
+import { ConfigureTournamentsUseCase } from "./application/configure-tournaments.use-case";
 import { CreateStoreUseCase } from "./application/create-store.use-case";
 import { GetStoreConfigurationUseCase } from "./application/get-store-configuration.use-case";
 import { ListStoreAssetsUseCase } from "./application/list-store-assets.use-case";
@@ -17,6 +18,7 @@ import { UpdateStoreConfigurationUseCase } from "./application/update-store-conf
 import { UploadStoreAssetUseCase } from "./application/upload-store-asset.use-case";
 import { ConfigureEventTypeDto } from "./dto/configure-event-type.dto";
 import { ConfigureTournamentTypeDto } from "./dto/configure-tournament-type.dto";
+import { ConfigureTournamentDto } from "./dto/configure-tournament.dto";
 import { CreateStoreDto } from "./dto/create-store.dto";
 import { ReplaceStoreSocialLinksDto } from "./dto/replace-store-social-links.dto";
 import { UpdateStoreConfigurationDto } from "./dto/update-store-configuration.dto";
@@ -38,6 +40,7 @@ export class StoresController {
     private readonly uploadStoreAssetUseCase: UploadStoreAssetUseCase,
     private readonly configureEventTypesUseCase: ConfigureEventTypesUseCase,
     private readonly configureTournamentTypesUseCase: ConfigureTournamentTypesUseCase,
+    private readonly configureTournamentsUseCase: ConfigureTournamentsUseCase,
     private readonly replaceStoreSocialLinksUseCase: ReplaceStoreSocialLinksUseCase,
     private readonly listVisibleStoresUseCase: ListVisibleStoresUseCase,
     private readonly listStoreAssetsUseCase: ListStoreAssetsUseCase,
@@ -52,6 +55,11 @@ export class StoresController {
   @Get("event-types")
   listVisibleEventTypes(@CurrentUser() user: AuthenticatedUserPayload) {
     return this.configureEventTypesUseCase.listVisibleForUser(user);
+  }
+
+  @Get("tournaments")
+  listVisibleTournaments(@CurrentUser() user: AuthenticatedUserPayload) {
+    return this.configureTournamentsUseCase.listVisibleForUser(user);
   }
 
   @Post()
@@ -178,6 +186,55 @@ export class StoresController {
       storeId,
       tournamentTypeId,
       ...body
+    });
+  }
+
+  @Get(":storeId/tournaments")
+  @UseGuards(StoreScopeGuard)
+  listTournaments(
+    @Param("storeId", ParseUUIDPipe) storeId: string,
+    @Query("status") status?: TournamentStatus
+  ) {
+    return this.configureTournamentsUseCase.list({
+      storeId,
+      status
+    });
+  }
+
+  @Post(":storeId/tournaments")
+  @UseGuards(StoreScopeGuard)
+  createTournament(@Param("storeId", ParseUUIDPipe) storeId: string, @Body() body: ConfigureTournamentDto) {
+    return this.configureTournamentsUseCase.create({
+      storeId,
+      ...body
+    });
+  }
+
+  @Put(":storeId/tournaments/:tournamentId")
+  @UseGuards(StoreScopeGuard)
+  updateTournament(
+    @Param("storeId", ParseUUIDPipe) storeId: string,
+    @Param("tournamentId", ParseUUIDPipe) tournamentId: string,
+    @Body() body: ConfigureTournamentDto
+  ) {
+    return this.configureTournamentsUseCase.update({
+      storeId,
+      tournamentId,
+      ...body
+    });
+  }
+
+  @Post(":storeId/tournaments/:tournamentId/close")
+  @UseGuards(StoreScopeGuard)
+  closeTournament(
+    @CurrentUser() user: AuthenticatedUserPayload,
+    @Param("storeId", ParseUUIDPipe) storeId: string,
+    @Param("tournamentId", ParseUUIDPipe) tournamentId: string
+  ) {
+    return this.configureTournamentsUseCase.close({
+      currentUser: user,
+      storeId,
+      tournamentId
     });
   }
 
