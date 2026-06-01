@@ -788,3 +788,76 @@ No quedan decisiones funcionales abiertas para iniciar `v0.1.0`.
     - El index autenticado muestra torneos por nombre y evento asociado.
     - Cada torneo puede tener logo cargado como asset permanente.
     - Torneos cerrados no admiten nuevas cargas.
+
+- [x] TASK-047: Mejorar catalogos, redes sociales y layout de logos.
+  - Criterios de aceptacion:
+    - AC-058.
+    - AC-059.
+    - AC-060.
+  - Archivos:
+    - `apps/frontend/src/features/stores/StoreCatalogsWorkspace.tsx`
+    - `apps/frontend/src/features/stores/StoreConfigurationWorkspace.tsx`
+    - `apps/frontend/src/features/stores/store-api.ts`
+    - `apps/frontend/src/styles/global.css`
+    - `apps/backend/src/modules/decks/application/generate-deck-image.use-case.ts`
+    - `apps/backend/src/modules/decks/infrastructure/node-canvas-deck-image-renderer.adapter.ts`
+    - `apps/backend/src/modules/decks/ports/deck-image-renderer.port.ts`
+    - `specs/requirements.md`
+    - `specs/design.md`
+    - `specs/api-contract.md`
+    - `README.md`
+  - Pruebas:
+    - Frontend lista eventos de tienda y abre creacion de torneo en modal desde una fila de evento.
+    - Frontend sube logos de evento y torneo desde el formulario antes de guardar.
+    - Frontend mueve redes sociales a configuracion de tienda y guarda una o muchas redes usando `storeId`.
+    - Backend renderer ubica logo de torneo arriba a la derecha, logo de evento abajo a la derecha y redes abajo a la izquierda.
+  - Criterios de finalizacion:
+    - `Catalogos` no contiene la administracion de redes sociales.
+    - Eventos, torneos y redes sociales no usan selector visible de logos existentes.
+    - El modal de redes sociales permite crear multiples filas antes de guardar.
+    - La imagen generada conserva todos los logos solicitados sin solaparse con la fuente inferior.
+
+- [x] TASK-048: Servir imagenes generadas desde el frontend.
+  - Criterios de aceptacion:
+    - La previsualizacion y descarga de imagenes generadas usan `/images/<storagePath>`.
+    - `frontend` proxyfica `/images/` hacia el servicio interno `image-storage`.
+    - `image-storage` no publica un puerto host dedicado.
+    - Docker Compose levanta `frontend` e `image-storage` sin conflicto con el puerto local `8081`.
+  - Archivos:
+    - `docker-compose.yml`
+    - `apps/frontend/nginx.conf`
+    - `apps/frontend/src/features/decks/DeckUploadWorkspace.tsx`
+    - `apps/frontend/src/App.test.tsx`
+    - `specs/design.md`
+    - `specs/api-contract.md`
+    - `README.md`
+  - Pruebas:
+    - Frontend construye `src` y enlace de descarga con `/images/generated-deck-images/...`.
+    - Build Docker expone imagenes mediante el nginx del frontend.
+  - Criterios de finalizacion:
+    - La imagen generada abre desde `http://127.0.0.1:5173/images/...`.
+    - Ya no se requiere abrir `http://127.0.0.1:8081/...`.
+
+- [x] TASK-049: Cifrar payloads con credenciales.
+  - Criterios de aceptacion:
+    - AC-061.
+  - Archivos:
+    - `apps/backend/src/modules/auth/dto/encrypted-auth-payload.dto.ts`
+    - `apps/backend/src/modules/auth/infrastructure/auth-payload-crypto.service.ts`
+    - `apps/backend/src/modules/auth/auth.controller.ts`
+    - `apps/backend/src/modules/auth/auth.module.ts`
+    - `apps/backend/test/auth-payload-crypto.service.spec.ts`
+    - `apps/frontend/src/features/auth/auth-crypto.ts`
+    - `apps/frontend/src/features/auth/auth-api.ts`
+    - `apps/frontend/src/features/security/security-api.ts`
+    - `apps/frontend/src/App.test.tsx`
+    - `specs/requirements.md`
+    - `specs/design.md`
+    - `specs/api-contract.md`
+    - `README.md`
+  - Pruebas:
+    - Backend descifra un sobre valido y rechaza `keyId` vencido.
+    - Frontend envia `login`, `register` y `change-password` como `encryptedPayload` sin contrasenas visibles.
+  - Criterios de finalizacion:
+    - Los requests sensibles no contienen `password`, `currentPassword` ni `newPassword` en texto plano.
+    - Los casos de uso existentes siguen recibiendo los valores descifrados desde el controlador.

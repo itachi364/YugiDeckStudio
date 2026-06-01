@@ -20,7 +20,7 @@ type GenerationResult = {
   generatedImage: GenerateDeckImageResponse | null;
 };
 
-const IMAGE_STORAGE_BASE_URL = import.meta.env.VITE_IMAGE_STORAGE_BASE_URL ?? "http://127.0.0.1:8081";
+const IMAGE_STORAGE_BASE_URL = import.meta.env.VITE_IMAGE_STORAGE_BASE_URL ?? "/images";
 const RESULT_OPTIONS = ["Ganador", "Segundo Puesto", "Top 3 - 4", "Top 8"];
 
 export function DeckUploadWorkspace({ accessToken, defaultStoreId }: DeckUploadWorkspaceProps) {

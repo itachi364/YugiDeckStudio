@@ -449,7 +449,7 @@ El módulo de tiendas debe permitir:
 - subir logos, iconos y fondos como assets permanentes;
 - configurar eventos por tienda;
 - configurar torneos por tienda y asociarlos a un evento;
-- reemplazar la lista de redes sociales por tienda.
+- reemplazar la lista de redes sociales por tienda desde la configuracion de tienda.
 
 Reglas:
 
@@ -461,6 +461,8 @@ Reglas:
 - Todos los assets configurables usan política `permanent`.
 - Los updates de eventos, torneos y redes siempre filtran por `store_id`.
 - La generación de imagen consume estos valores desde PostgreSQL y nunca desde datos hardcodeados.
+- La UI de eventos, torneos y redes sube el logo desde el formulario operativo y usa el `asset_id` resultante en la misma creacion o reemplazo. No se expone un selector de logos existentes para estas entidades.
+- La accion `Crear redes sociales` pertenece a la configuracion de tienda, usa el `store_id` seleccionado y permite enviar una o muchas redes en una sola confirmacion.
 
 ## 7.2 Diseño de torneos y cierre
 
@@ -479,6 +481,8 @@ Reglas:
 - El cierre automatico se ejecuta despues de cargar deck cuando la distribucion del torneo sea exactamente 1 `Ganador`, 1 `Segundo Puesto`, 2 `Top 3 - 4` y 4 `Top 8`.
 - Un torneo cerrado bloquea nuevas cargas.
 - El logo de torneo se almacena como asset permanente y se renderiza en la parte superior derecha de la imagen generada.
+- La ventana de catalogos lista eventos por tienda y cada fila de evento ofrece `Crear torneo`.
+- El formulario de torneo se abre en modal con el evento seleccionado desde la fila.
 
 ## 8. Diseño de generación de imagen
 
@@ -496,7 +500,11 @@ La plantilla por defecto debe soportar:
 
 El renderer debe recibir datos estructurados del deck y configuración de branding. No debe consultar APIs externas directamente.
 
-Si el torneo tiene logo activo, el renderer debe dibujarlo en el slot superior derecho. Ese logo tiene prioridad visual sobre logos heredados de evento en esa posicion.
+Si el torneo tiene logo activo, el renderer debe dibujarlo en el slot superior derecho.
+
+Si el evento asociado al torneo tiene logo activo, el renderer debe dibujarlo en el slot inferior derecho.
+
+Las redes sociales activas deben renderizar sus iconos y handles en el slot inferior izquierdo, ordenadas por `display_order`.
 
 La grilla del Main Deck debe adaptar columnas y tamaño de carta para renderizar decks legales completos, incluyendo Main Deck de 40 a 60 cartas, sin truncar cartas expandidas por cantidad. Extra Deck y Side Deck deben renderizar hasta 15 cartas cada uno.
 
@@ -534,6 +542,16 @@ Responsabilidades de `root`:
 - Ver y administrar información de todas las tiendas.
 
 Las contraseñas deben almacenarse usando hashing seguro.
+
+Los payloads que contienen contraseñas deben cifrarse en el navegador antes de enviarse:
+
+- El frontend solicita `GET /api/auth/encryption-key` para obtener la llave publica activa.
+- El frontend serializa el cuerpo sensible, lo cifra con AES-GCM y cifra la llave AES con RSA-OAEP SHA-256.
+- El backend descifra el sobre en el controlador HTTP mediante un servicio de infraestructura.
+- Los casos de uso reciben DTOs ya descifrados y conservan la responsabilidad actual de validar credenciales, hashear contraseñas y emitir token.
+- Si la llave ya no coincide o el contenido fue alterado, el backend rechaza la solicitud antes de ejecutar el caso de uso.
+
+Esta capa evita que el payload JSON muestre contraseñas en texto plano en DevTools. No reemplaza HTTPS/TLS para despliegues fuera de localhost.
 
 La autorización debe basarse en permisos, no solo en nombres de rol.
 
@@ -769,7 +787,7 @@ Servicios locales propuestos:
 - `backend`.
 - `postgres`.
 - `image-permissions` para inicializar permisos del volumen local de imagenes antes de iniciar servicios que escriben archivos.
-- `image-storage` o módulo equivalente de backend para servir imágenes desde volumen local.
+- `image-storage` interno para servir imágenes desde volumen local, expuesto al navegador por el proxy `/images/` del frontend.
 - `image-cleaner` o job programado equivalente para depuración semanal.
 
 Volúmenes propuestos:
@@ -778,6 +796,8 @@ Volúmenes propuestos:
 - `yugideck_image_data`.
 
 El backend e `image-cleaner` deben ejecutarse como usuario no-root. El volumen `yugideck_image_data` debe quedar con propiedad compatible con el usuario runtime de Node para permitir escritura en carpetas como `uploaded-decklists`, `generated-deck-images`, `card-images`, `store-logos`, `event-logos`, `social-logos` y `background-images`.
+
+El contenedor frontend debe publicar las rutas `/api/` hacia `backend` y `/images/` hacia `image-storage`. `image-storage` no debe depender de un puerto host dedicado para evitar conflictos con rangos TCP reservados del sistema operativo local.
 
 No se debe diseñar despliegue a internet en esta fase.
 
@@ -809,6 +829,7 @@ La duración de retención definida para `v0.1.0` es de 7 días.
 - Almacenar archivos fuera de rutas ejecutables.
 - Evitar registrar en logs el contenido de imágenes subidas o datos sensibles.
 - Validar todos los cuerpos de solicitud.
+- Cifrar en frontend los cuerpos de solicitud que contengan credenciales antes de enviarlos al backend.
 - Cerrar la sesion local despues de 20 minutos de inactividad y limpiar el token almacenado en navegador.
 - Sincronizar cierre de sesion entre pestanas mediante eventos de almacenamiento del navegador.
 - No hardcodear credenciales ni secretos de base de datos.

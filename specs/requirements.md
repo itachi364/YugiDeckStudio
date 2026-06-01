@@ -139,6 +139,12 @@ Los eventos son variedades o categorias activas de una tienda. Un evento puede t
 
 Cada torneo debe permitir configurar nombre, descripcion opcional, evento asociado, logo opcional y estado `OPEN` o `CLOSED`.
 
+La ventana de catalogos debe listar primero los eventos de la tienda seleccionada. La creacion de torneos debe iniciarse desde un evento listado mediante un modal con el evento ya seleccionado.
+
+La creacion de eventos, torneos y redes sociales debe cargar el logo directamente desde el formulario operativo. No debe requerir seleccionar un logo previamente cargado desde una lista.
+
+La configuracion de redes sociales pertenece a la ventana de configuracion de tienda. Cada tienda debe tener una accion `Crear redes sociales` que abra un modal para diligenciar una o varias redes al tiempo y enviar el `storeId` de la tienda seleccionada.
+
 ### REQ-008A: Cierre de torneo
 
 La aplicación debe cerrar automaticamente un torneo cuando existan ocho decks cargados para ese torneo con esta distribucion exacta de resultados:
@@ -286,6 +292,8 @@ La aplicación no debe hardcodear secretos.
 La aplicación debe limitar tamaño, tipo MIME y extensión de imágenes subidas.
 
 Las contraseñas deben almacenarse con hashing seguro y nunca en texto plano.
+
+Los formularios que envían contraseñas no deben enviar esos valores en texto plano dentro del payload JSON visible de la solicitud. El frontend debe cifrar el cuerpo sensible antes de enviarlo y el backend debe descifrarlo en la capa HTTP antes de ejecutar los casos de uso.
 
 Las operaciones protegidas deben aplicar autorización por permisos y alcance por tienda.
 
@@ -618,6 +626,36 @@ Dado que un torneo esta `CLOSED`, cuando un usuario intenta cargar otro deck en 
 Dado que un torneo tiene logo activo configurado, cuando se genera la imagen del deck, entonces el logo del torneo debe renderizarse en la parte superior derecha de la imagen.
 
 Dado que el torneo no tiene logo configurado, cuando se genera la imagen del deck, entonces la imagen conserva el comportamiento de logos disponible sin fallar.
+
+### AC-058: Catalogos con torneos en modal por evento
+
+Dado que un administrador consulta los catalogos de una tienda, cuando existen eventos configurados, entonces la pantalla lista los eventos en una tabla con accion `Crear torneo` por evento.
+
+Dado que el administrador selecciona `Crear torneo` en un evento, cuando se abre el formulario, entonces se muestra en modal y el torneo queda asociado al evento seleccionado sin exigir elegir otro evento.
+
+Dado que el administrador crea un evento o torneo con archivo de logo, cuando guarda el formulario, entonces el frontend sube el archivo como asset permanente de la categoria correspondiente y envia el `logoAssetId` resultante al backend.
+
+### AC-059: Redes sociales por tienda en modal
+
+Dado que un administrador consulta o crea una tienda, cuando la tienda tiene `storeId`, entonces la ventana de configuracion de tienda muestra la accion `Crear redes sociales`.
+
+Dado que el administrador abre `Crear redes sociales`, cuando diligencia una o muchas redes y guarda, entonces el frontend sube el logo de cada red como `SOCIAL_LOGO` y envia la lista al endpoint `/api/stores/{storeId}/social-links`.
+
+Dado que una red social tiene logo cargado desde su fila del formulario, cuando se guarda la lista, entonces el backend conserva `iconAssetId` asociado a la tienda indicada y no permite asociar iconos de otra tienda.
+
+### AC-060: Ubicacion de logos en imagen generada
+
+Dado que el evento del torneo tiene logo activo, cuando se genera la imagen del deck, entonces el logo del evento se renderiza en la parte inferior derecha.
+
+Dado que la tienda tiene redes sociales activas con iconos, cuando se genera la imagen del deck, entonces los iconos y handles de redes sociales se renderizan en la parte inferior izquierda.
+
+### AC-061: Payload cifrado para credenciales
+
+Dado que el usuario inicia sesion, registra un operador, cambia contrasena o crea un administrador de tienda, cuando el frontend envia la solicitud al backend, entonces el payload HTTP no debe contener `password`, `currentPassword` ni `newPassword` en texto plano.
+
+Dado que el backend recibe un sobre cifrado de autenticacion, cuando la llave es valida y el contenido no fue alterado, entonces descifra el JSON y ejecuta el caso de uso existente sin almacenar contrasenas en texto plano.
+
+Dado que el backend recibe un sobre cifrado con llave vencida, llave incorrecta o contenido alterado, cuando intenta descifrarlo, entonces rechaza la solicitud con error de validacion sin ejecutar el caso de uso.
 
 ## 8. Preguntas abiertas
 

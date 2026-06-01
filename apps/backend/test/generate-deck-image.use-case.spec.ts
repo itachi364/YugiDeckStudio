@@ -215,6 +215,65 @@ describe("GenerateDeckImageUseCase", () => {
     );
   });
 
+  it("passes event logo and social icon paths to the image renderer", async () => {
+    findDeck.mockResolvedValue({
+      id: "deck-id",
+      deckName: "Blue-Eyes",
+      resultLabel: "Ganador",
+      player: {
+        displayName: "Kaiba"
+      },
+      tournament: {
+        name: "Local WCQ",
+        eventDate: new Date("2026-05-01T00:00:00.000Z"),
+        logoAsset: null,
+        eventType: {
+          name: "Regional",
+          logoAsset: {
+            storagePath: "event-logos/regional.png",
+            deletedAt: null
+          }
+        },
+        tournamentType: null
+      },
+      store: {
+        backgroundColor: "#111827",
+        sourceCreditText: "ReadyForDuel",
+        primaryLogoAsset: null,
+        secondaryLogoAsset: null,
+        backgroundImageAsset: null,
+        socialLinks: [
+          {
+            platform: "Instagram",
+            handle: "@readyforduel",
+            displayOrder: 1,
+            iconAsset: {
+              storagePath: "social-logos/instagram.png",
+              deletedAt: null
+            }
+          }
+        ]
+      },
+      deckCards: buildRenderableMainDeck(40)
+    });
+
+    await useCase.execute("deck-id");
+
+    expect(render).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventLogoPath: "C:\\images\\event-logos/regional.png",
+        socialLinks: [
+          {
+            platform: "Instagram",
+            handle: "@readyforduel",
+            displayOrder: 1,
+            iconPath: "C:\\images\\social-logos/instagram.png"
+          }
+        ]
+      })
+    );
+  });
+
   it("blocks generation when a deck card is unresolved", async () => {
     findDeck.mockResolvedValue({
       id: "deck-id",

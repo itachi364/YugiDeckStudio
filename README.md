@@ -7,6 +7,7 @@ Esta version es local-only. No incluye despliegue a internet, Hostinger, AWS ni 
 ## Funcionalidades Principales
 
 - Login local, registro de operadores y cambio obligatorio de contrasena para `root`.
+- Cifrado de payloads con credenciales antes de enviarlos al backend local.
 - Administracion de usuarios, roles y permisos con aislamiento multi-tienda.
 - Carga de deck list por imagen como evidencia con metadatos de jugador, torneo, resultado, deck y link Neuron obligatorio.
 - Importacion estructurada desde Yu-Gi-Oh! Neuron y revision/correccion manual de composicion antes de generar imagenes.
@@ -62,7 +63,6 @@ Variables principales:
 ```text
 BACKEND_PORT=3000
 FRONTEND_PORT=5173
-IMAGE_STORAGE_PORT=8081
 POSTGRES_DB=yugideckstudio
 POSTGRES_USER=yugideck
 POSTGRES_PASSWORD=yugideck_local_password
@@ -76,7 +76,7 @@ GENERATED_IMAGE_RETENTION_DAYS=7
 YGOPRODECK_API_BASE_URL=https://db.ygoprodeck.com/api/v7
 ```
 
-El frontend consume la API con `/api` mediante el proxy de Nginx del contenedor. La previsualizacion de imagenes usa `http://127.0.0.1:8081` por defecto para servir los `storagePath` generados desde el volumen local.
+El frontend consume la API con `/api` mediante el proxy de Nginx del contenedor. La previsualizacion de imagenes usa `/images/<storagePath>` por el mismo frontend, y Nginx sirve esos archivos desde el servicio interno `image-storage`.
 
 ## Ejecucion con Docker Compose
 
@@ -114,7 +114,7 @@ Servicios locales:
 
 - Frontend: `http://127.0.0.1:5173`
 - Backend: `http://127.0.0.1:3000`
-- Image storage: `http://127.0.0.1:8081`
+- Image storage: interno por Docker, expuesto al navegador mediante `http://127.0.0.1:5173/images/...`
 - PostgreSQL: `127.0.0.1:5432`
 - Image permissions: servicio one-shot que prepara permisos del volumen `yugideck_image_data`.
 
@@ -159,14 +159,15 @@ El primer login obliga a cambiar la contrasena antes de usar el resto de modulos
 
 1. Inicia sesion como `root` y cambia la contrasena temporal.
 2. Crea o configura el primer administrador de tienda.
-3. Configura tienda, logos, fondo, eventos, torneos y redes sociales.
-4. Carga una imagen de deck list, selecciona un torneo abierto, selecciona el resultado e incluye el link publico de Neuron.
-5. Desde el resultado de carga o el listado de decks, abre `Revisar deck`.
-6. Revisa/corrige la composicion y confirma el deck.
-7. Desde la fila del deck confirmado en `Decks`, usa `Generar imagen`.
-8. En desktop, la revision y la generacion se abren en modales. En celular, se abren como vistas completas con accion `Volver`.
-9. La aplicacion cachea cartas, genera la imagen final y muestra la previsualizacion.
-10. Descarga el PNG desde el panel de resultado.
+3. Configura tienda, logos, fondo y redes sociales desde `Tienda`.
+4. Configura eventos desde `Catalogos`; desde cada evento usa `Crear torneo` para abrir el modal de torneo asociado.
+5. Carga una imagen de deck list, selecciona un torneo abierto, selecciona el resultado e incluye el link publico de Neuron.
+6. Desde el resultado de carga o el listado de decks, abre `Revisar deck`.
+7. Revisa/corrige la composicion y confirma el deck.
+8. Desde la fila del deck confirmado en `Decks`, usa `Generar imagen`.
+9. En desktop, la revision y la generacion se abren en modales. En celular, se abren como vistas completas con accion `Volver`.
+10. La aplicacion cachea cartas, genera la imagen final y muestra la previsualizacion.
+11. Descarga el PNG desde el panel de resultado.
 
 ## Sesion Local
 
@@ -181,6 +182,19 @@ Reglas aplicadas:
 
 El timeout de inactividad es una proteccion de frontend local. La expiracion criptografica del JWT sigue dependiendo de la configuracion del backend.
 
+## Seguridad de Credenciales
+
+Los formularios que envian contrasenas usan un sobre cifrado antes del `fetch`.
+
+Flujo local:
+
+1. El frontend solicita `GET /api/auth/encryption-key`.
+2. El navegador cifra el JSON sensible con AES-GCM.
+3. La llave AES se cifra con RSA-OAEP SHA-256 usando la llave publica activa del backend.
+4. El backend descifra el sobre en la capa HTTP y ejecuta los casos de uso existentes.
+
+Esto evita que el payload JSON muestre contrasenas en texto plano en DevTools. Para despliegues fuera de localhost, HTTPS/TLS sigue siendo obligatorio como cifrado de transporte.
+
 ## Imagenes y Retencion
 
 El volumen `yugideck_image_data` guarda:
@@ -191,6 +205,8 @@ El volumen `yugideck_image_data` guarda:
 - Logos de tienda, eventos y redes: permanentes.
 - Logos de torneos: permanentes.
 - Fondos configurables: permanentes.
+
+Los logos de eventos, torneos y redes se cargan directamente desde sus formularios. Las redes sociales se crean desde la configuracion de tienda con un modal que permite guardar una o varias redes para el `storeId` seleccionado.
 
 El backend e `image-cleaner` corren como usuario no-root. Docker Compose ejecuta el servicio `image-permissions` antes de iniciar esos servicios para que `/data/images` pueda escribirse sin ejecutar la aplicacion como root.
 
@@ -305,7 +321,8 @@ Login queda en `Validando`:
 
 Imagen generada no se ve:
 
-- Verifica que `image-storage` este arriba en `http://127.0.0.1:8081`.
+- Verifica que `frontend` e `image-storage` esten arriba con `docker compose ps`.
+- Abre la imagen mediante `http://127.0.0.1:5173/images/<storagePath>`.
 - Revisa que la respuesta de generacion tenga `storagePath`.
 - Confirma que el asset exista en el volumen `yugideck_image_data`.
 

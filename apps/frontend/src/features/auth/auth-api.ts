@@ -1,3 +1,5 @@
+import { encryptAuthPayload } from "./auth-crypto";
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 export type AuthUser = {
@@ -75,17 +77,25 @@ async function postJson<TResponse>(
   return parseJsonResponse<TResponse>(response);
 }
 
+async function postEncryptedJson<TResponse>(
+  path: string,
+  body: object,
+  accessToken?: string
+): Promise<TResponse> {
+  return postJson<TResponse>(path, await encryptAuthPayload(body), accessToken);
+}
+
 export const authApi = {
   login(input: LoginInput) {
-    return postJson<LoginResponse>("/auth/login", input);
+    return postEncryptedJson<LoginResponse>("/auth/login", input);
   },
 
   register(input: RegisterUserInput) {
-    return postJson<RegisterUserResponse>("/auth/register", input);
+    return postEncryptedJson<RegisterUserResponse>("/auth/register", input);
   },
 
   changePassword(input: ChangePasswordInput) {
     const { accessToken, ...body } = input;
-    return postJson<ChangePasswordResponse>("/auth/change-password", body, accessToken);
+    return postEncryptedJson<ChangePasswordResponse>("/auth/change-password", body, accessToken);
   }
 };

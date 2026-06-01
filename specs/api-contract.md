@@ -261,7 +261,7 @@ Respuesta exitosa `200 OK`:
 }
 ```
 
-La previsualizacion y descarga en frontend se construyen con `storagePath` servido por el servicio local `image-storage` sobre el mismo volumen Docker de imagenes.
+La previsualizacion y descarga en frontend se construyen con `/images/<storagePath>`. El Nginx del frontend debe resolver esa ruta contra el servicio interno `image-storage` sobre el mismo volumen Docker de imagenes.
 
 Reglas:
 
@@ -470,6 +470,7 @@ Reglas:
 - `logoAssetId`, cuando exista, debe apuntar a un asset `EVENT_LOGO`.
 - Solo se actualizan eventos de la tienda indicada.
 - `operator`, `store_admin` y `root` pueden crear o modificar eventos dentro de su alcance de tienda.
+- En frontend, el logo de evento se carga desde el formulario de evento mediante `POST /api/stores/{storeId}/assets` con categoria `EVENT_LOGO`; luego se envia el `logoAssetId` creado.
 
 ### `DELETE /api/stores/{storeId}/event-types/{eventTypeId}`
 
@@ -541,6 +542,8 @@ Reglas:
 - Solo se actualizan torneos de la tienda indicada.
 - Los torneos se crean como `OPEN`; el estado solo pasa a `CLOSED` mediante cierre manual o automatico.
 - Un torneo cerrado no debe aceptar nuevas cargas de decks.
+- En frontend, la creacion de torneo se abre desde una fila de evento; el `eventTypeId` se toma del evento seleccionado.
+- En frontend, el logo de torneo se carga desde el formulario de torneo mediante `POST /api/stores/{storeId}/assets` con categoria `TOURNAMENT_LOGO`; luego se envia el `logoAssetId` creado.
 
 ### `POST /api/stores/{storeId}/tournaments/{tournamentId}/close`
 
@@ -593,8 +596,44 @@ Reglas:
 
 - `iconAssetId`, cuando exista, debe apuntar a un asset `SOCIAL_LOGO`.
 - Reemplazar redes no elimina fisicamente los iconos; siguen siendo assets permanentes.
+- En frontend, las redes sociales se administran desde configuracion de tienda mediante un modal `Crear redes sociales`.
+- El modal permite enviar una o muchas redes sociales al tiempo para el `storeId` seleccionado.
+- El logo de cada red social se carga desde su fila mediante `POST /api/stores/{storeId}/assets` con categoria `SOCIAL_LOGO`; luego se envia el `iconAssetId` creado.
 
 ## 9. Autenticacion local
+
+### Cifrado de payloads sensibles
+
+Los endpoints que reciben contrasenas deben recibir un sobre cifrado en lugar de campos sensibles en texto plano.
+
+Primero el frontend obtiene la llave publica activa:
+
+### `GET /api/auth/encryption-key`
+
+Respuesta exitosa `200 OK`:
+
+```json
+{
+  "keyId": "uuid",
+  "algorithm": "RSA-OAEP-256+A256GCM",
+  "publicKeyJwk": {}
+}
+```
+
+Los endpoints sensibles reciben este formato:
+
+```json
+{
+  "encryptedPayload": {
+    "keyId": "uuid",
+    "encryptedKey": "base64url",
+    "iv": "base64url",
+    "ciphertext": "base64url"
+  }
+}
+```
+
+El `ciphertext` contiene el JSON original cifrado con AES-GCM. `encryptedKey` contiene la llave AES cifrada con RSA-OAEP SHA-256.
 
 ### `POST /api/auth/root/initialize`
 
@@ -622,7 +661,7 @@ Reglas:
 
 Inicia sesion local.
 
-Body:
+Payload logico antes de cifrar:
 
 ```json
 {
@@ -664,7 +703,7 @@ Headers:
 Authorization: Bearer jwt
 ```
 
-Body:
+Payload logico antes de cifrar:
 
 ```json
 {
@@ -692,7 +731,7 @@ Reglas:
 
 Registra un usuario local no-root vinculado a una tienda. En `v0.1.0`, el registro local crea usuarios operativos con rol `operator`.
 
-Body:
+Payload logico antes de cifrar:
 
 ```json
 {
@@ -721,7 +760,7 @@ Headers:
 Authorization: Bearer jwt
 ```
 
-Body para crear tienda y admin:
+Payload logico antes de cifrar para crear tienda y admin:
 
 ```json
 {
@@ -733,7 +772,7 @@ Body para crear tienda y admin:
 }
 ```
 
-Body para usar tienda existente:
+Payload logico antes de cifrar para usar tienda existente:
 
 ```json
 {

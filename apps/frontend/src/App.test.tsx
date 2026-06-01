@@ -1,10 +1,18 @@
-﻿import { render, screen, waitFor } from "@testing-library/react";
+﻿import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
 const fetchMock = vi.fn();
+const encryptedPayloadShape = expect.objectContaining({
+  encryptedPayload: expect.objectContaining({
+    keyId: "test-key",
+    encryptedKey: expect.any(String),
+    iv: expect.any(String),
+    ciphertext: expect.any(String)
+  })
+});
 
 function renderApp() {
   const queryClient = new QueryClient();
@@ -123,6 +131,46 @@ async function queueStoreAssets(assets: unknown[] = []) {
   fetchMock.mockResolvedValueOnce(await mockJsonResponse(assets));
 }
 
+function setupAuthEncryptionMock() {
+  const encryptedBytes = new TextEncoder().encode("encrypted-payload");
+  const rawAesKey = new Uint8Array(32).fill(9);
+  const subtle = {
+    importKey: vi.fn().mockResolvedValue({}),
+    generateKey: vi.fn().mockResolvedValue({}),
+    exportKey: vi.fn().mockResolvedValue(rawAesKey.buffer),
+    encrypt: vi.fn().mockResolvedValue(encryptedBytes.buffer)
+  };
+  const cryptoMock = {
+    subtle,
+    getRandomValues: (array: Uint8Array) => {
+      array.fill(7);
+      return array;
+    }
+  } as unknown as Crypto;
+
+  vi.stubGlobal("crypto", cryptoMock);
+  window.__YUGIDECKSTUDIO_AUTH_ENCRYPTION_KEY__ = {
+    keyId: "test-key",
+    algorithm: "RSA-OAEP-256+A256GCM",
+    publicKeyJwk: {
+      kty: "RSA",
+      n: "test",
+      e: "AQAB",
+      alg: "RSA-OAEP-256",
+      ext: true
+    }
+  };
+}
+
+function expectEncryptedPost(path: string, disallowedValues: string[]) {
+  const call = fetchMock.mock.calls.find(([url, options]) => url === path && options?.method === "POST");
+  const body = String(call?.[1]?.body ?? "");
+
+  expect(call).toBeDefined();
+  disallowedValues.forEach((value) => expect(body).not.toContain(value));
+  expect(JSON.parse(body)).toEqual(encryptedPayloadShape);
+}
+
 async function loginAndOpenDecks(
   user: ReturnType<typeof userEvent.setup>,
   decks: unknown[] = [
@@ -230,7 +278,7 @@ async function loginAndOpenCatalogs(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: /entrar/i }));
   await user.click(await screen.findByRole("button", { name: /catalogos/i }));
 
-  expect(await screen.findByRole("heading", { name: /catalogos y redes/i })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { level: 2, name: /eventos y torneos/i })).toBeInTheDocument();
 }
 
 function setDesktopViewport() {
@@ -258,12 +306,15 @@ describe("App", () => {
   beforeEach(() => {
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
+    setupAuthEncryptionMock();
     localStorage.clear();
     setDesktopViewport();
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
+    delete window.__YUGIDECKSTUDIO_AUTH_ENCRYPTION_KEY__;
     localStorage.clear();
   });
 
@@ -321,19 +372,8 @@ describe("App", () => {
     await user.type(screen.getByLabelText(/^contrasena$/i), "Operator123!");
     await user.click(screen.getByRole("button", { name: /registrar/i }));
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/auth/register",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({
-          storeId: "store-id",
-          username: "operator1",
-          password: "Operator123!",
-          displayName: "Operator One",
-          email: "operator@example.com"
-        })
-      })
-    );
+    expectEncryptedPost("/api/auth/login", ["ChangedPassword123!"]);
+    expectEncryptedPost("/api/auth/register", ["Operator123!"]);
     expect(await screen.findByText(/usuario operator1 registrado como operator/i)).toBeInTheDocument();
   });
 
@@ -385,13 +425,10 @@ describe("App", () => {
         method: "POST",
         headers: expect.objectContaining({
           Authorization: "Bearer jwt-token"
-        }),
-        body: JSON.stringify({
-          currentPassword: "ChangeMe123!",
-          newPassword: "NewPassword123!"
         })
       })
     );
+    expectEncryptedPost("/api/auth/change-password", ["ChangeMe123!", "NewPassword123!"]);
     expect(await screen.findByText(/contrasena actualizada/i)).toBeInTheDocument();
   });
 
@@ -1402,7 +1439,7 @@ describe("App", () => {
     expect(await screen.findByText(/background_image cargado como asset permanente/i)).toBeInTheDocument();
   });
 
-  it("loads events, tournaments and social links", async () => {
+  it("loads events and tournaments from catalogs", async () => {
     const user = userEvent.setup();
     await loginAndOpenCatalogs(user);
     fetchMock.mockResolvedValueOnce(
@@ -1434,33 +1471,12 @@ describe("App", () => {
         }
       ])
     );
-    fetchMock.mockResolvedValueOnce(
-      await mockJsonResponse([
-        {
-          id: "social-id",
-          platform: "Instagram",
-          handle: "@readyforduel",
-          url: "https://instagram.com/readyforduel",
-          iconAssetId: "social-logo-id",
-          displayOrder: 1,
-          isActive: true
-        }
-      ])
-    );
-    await queueStoreAssets([
-      { id: "event-logo-id", category: "EVENT_LOGO", originalFilename: "regional.png", storagePath: "event-logos/regional.png" }
-    ]);
-    await queueStoreAssets([]);
-    await queueStoreAssets([
-      { id: "social-logo-id", category: "SOCIAL_LOGO", originalFilename: "instagram.png", storagePath: "social-logos/instagram.png" }
-    ]);
 
     await user.click(screen.getByRole("button", { name: /consultar/i }));
 
     expect(await screen.findByText(/catalogos de tienda cargados/i)).toBeInTheDocument();
     expect(screen.getByText(/wcq regional/i)).toBeInTheDocument();
     expect(screen.getByText(/torneo local/i)).toBeInTheDocument();
-    expect(screen.getByDisplayValue(/@readyforduel/i)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/stores/store-id/event-types",
       expect.objectContaining({
@@ -1477,27 +1493,23 @@ describe("App", () => {
         })
       })
     );
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/stores/store-id/social-links",
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: "Bearer admin-token"
-        })
-      })
-    );
   });
 
-  it("creates events and tournaments", async () => {
+  it("creates events with direct logo upload and tournaments from an event modal", async () => {
     const user = userEvent.setup();
+    const eventLogoFile = new File(["event-logo"], "regional.png", { type: "image/png" });
+    const tournamentLogoFile = new File(["tournament-logo"], "local.png", { type: "image/png" });
     await loginAndOpenCatalogs(user);
     fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
     fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
-    fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
-    await queueStoreAssets([
-      { id: "event-logo-id", category: "EVENT_LOGO", originalFilename: "regional.png", storagePath: "event-logos/regional.png" }
-    ]);
-    await queueStoreAssets([]);
-    await queueStoreAssets([]);
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        imageAssetId: "event-logo-id",
+        category: "EVENT_LOGO",
+        storagePath: "event-logos/regional.png",
+        retentionPolicy: "PERMANENT"
+      })
+    );
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse({
         id: "event-type-id",
@@ -1510,12 +1522,20 @@ describe("App", () => {
     );
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse({
+        imageAssetId: "tournament-logo-id",
+        category: "TOURNAMENT_LOGO",
+        storagePath: "tournament-logos/local.png",
+        retentionPolicy: "PERMANENT"
+      })
+    );
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
         id: "tournament-id",
         storeId: "store-id",
         eventTypeId: "event-type-id",
         name: "Torneo Local",
         description: "Torneo semanal",
-        logoAssetId: null,
+        logoAssetId: "tournament-logo-id",
         eventDate: "2026-05-21T00:00:00.000Z",
         location: "Bogota",
         status: "OPEN",
@@ -1529,20 +1549,31 @@ describe("App", () => {
 
     await user.type(screen.getByLabelText(/evento nombre/i), "Regional");
     await user.type(screen.getByLabelText(/evento descripcion/i), "WCQ Regional");
-    await user.selectOptions(screen.getByLabelText(/evento logo/i), "event-logo-id");
+    await user.upload(screen.getByLabelText(/evento logo/i), eventLogoFile);
     await user.click(screen.getByRole("button", { name: /crear evento/i }));
 
-    await user.selectOptions(screen.getByLabelText(/^evento$/i), "event-type-id");
-    await user.type(screen.getByLabelText(/torneo nombre/i), "Torneo Local");
-    await user.type(screen.getByLabelText(/torneo descripcion/i), "Torneo semanal");
-    await user.type(screen.getByLabelText(/^fecha$/i), "2026-05-21");
-    await user.type(screen.getByLabelText(/ubicacion/i), "Bogota");
+    await screen.findByText(/evento regional creado/i);
     await user.click(screen.getByRole("button", { name: /crear torneo/i }));
+    const tournamentDialog = await screen.findByRole("dialog", { name: /crear torneo - regional/i });
+    expect(tournamentDialog).toBeInTheDocument();
+    await user.type(within(tournamentDialog).getByLabelText(/torneo nombre/i), "Torneo Local");
+    await user.type(within(tournamentDialog).getByLabelText(/torneo descripcion/i), "Torneo semanal");
+    await user.type(within(tournamentDialog).getByLabelText(/^fecha$/i), "2026-05-21");
+    await user.type(within(tournamentDialog).getByLabelText(/ubicacion/i), "Bogota");
+    await user.upload(within(tournamentDialog).getByLabelText(/torneo logo/i), tournamentLogoFile);
+    await user.click(within(tournamentDialog).getByRole("button", { name: /crear torneo/i }));
 
     await waitFor(() => {
       expect(fetchMock.mock.calls.some(([url, options]) => url === "/api/stores/store-id/event-types" && options?.method === "POST")).toBe(true);
       expect(fetchMock.mock.calls.some(([url, options]) => url === "/api/stores/store-id/tournaments" && options?.method === "POST")).toBe(true);
     });
+
+    const uploadCalls = fetchMock.mock.calls.filter(([url]) => url === "/api/stores/store-id/assets");
+    expect(uploadCalls).toHaveLength(2);
+    expect((uploadCalls[0]?.[1]?.body as FormData).get("category")).toBe("EVENT_LOGO");
+    expect((uploadCalls[0]?.[1]?.body as FormData).get("image")).toBe(eventLogoFile);
+    expect((uploadCalls[1]?.[1]?.body as FormData).get("category")).toBe("TOURNAMENT_LOGO");
+    expect((uploadCalls[1]?.[1]?.body as FormData).get("image")).toBe(tournamentLogoFile);
 
     const eventCall = fetchMock.mock.calls.find(([url, options]) => url === "/api/stores/store-id/event-types" && options?.method === "POST");
     const tournamentCall = fetchMock.mock.calls.find(([url, options]) => url === "/api/stores/store-id/tournaments" && options?.method === "POST");
@@ -1564,7 +1595,7 @@ describe("App", () => {
           eventTypeId: "event-type-id",
           name: "Torneo Local",
           description: "Torneo semanal",
-          logoAssetId: null,
+          logoAssetId: "tournament-logo-id",
           eventDate: "2026-05-21",
           location: "Bogota"
         })
@@ -1573,55 +1604,94 @@ describe("App", () => {
     expect(await screen.findByText(/torneo torneo local creado/i)).toBeInTheDocument();
   });
 
-  it("replaces store social links", async () => {
+  it("creates multiple store social links from store configuration with direct logo uploads", async () => {
     const user = userEvent.setup();
-    await loginAndOpenCatalogs(user);
-    fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
-    fetchMock.mockResolvedValueOnce(await mockJsonResponse([]));
+    const instagramLogo = new File(["instagram"], "instagram.png", { type: "image/png" });
+    const facebookLogo = new File(["facebook"], "facebook.png", { type: "image/png" });
+    await loginAndOpenStoreConfiguration(user);
     fetchMock.mockResolvedValueOnce(
-      await mockJsonResponse([
-        {
-          id: "social-id",
-          platform: "Instagram",
-          handle: "@readyforduel",
-          url: "https://instagram.com/readyforduel",
-          iconAssetId: "social-logo-id",
-          displayOrder: 1,
-          isActive: true
-        }
-      ])
+      await mockJsonResponse({
+        id: "store-id",
+        name: "Ready For Duel",
+        primaryLogoAssetId: null,
+        secondaryLogoAssetId: null,
+        backgroundImageAssetId: null,
+        backgroundColor: "#10131a",
+        sourceCreditText: "ReadyForDuel",
+        socialLinks: []
+      })
     );
     await queueStoreAssets([]);
     await queueStoreAssets([]);
-    await queueStoreAssets([
-      { id: "social-logo-id", category: "SOCIAL_LOGO", originalFilename: "instagram.png", storagePath: "social-logos/instagram.png" }
-    ]);
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        imageAssetId: "instagram-logo-id",
+        category: "SOCIAL_LOGO",
+        storagePath: "social-logos/instagram.png",
+        retentionPolicy: "PERMANENT"
+      })
+    );
+    fetchMock.mockResolvedValueOnce(
+      await mockJsonResponse({
+        imageAssetId: "facebook-logo-id",
+        category: "SOCIAL_LOGO",
+        storagePath: "social-logos/facebook.png",
+        retentionPolicy: "PERMANENT"
+      })
+    );
     fetchMock.mockResolvedValueOnce(
       await mockJsonResponse([
         {
-          id: "social-id",
+          id: "social-id-1",
           platform: "Instagram",
           handle: "@yugistudio",
           url: "https://instagram.com/yugistudio",
-          iconAssetId: "social-logo-id",
+          iconAssetId: "instagram-logo-id",
           displayOrder: 1,
+          isActive: true
+        },
+        {
+          id: "social-id-2",
+          platform: "Facebook",
+          handle: "Yugi Studio",
+          url: "https://facebook.com/yugistudio",
+          iconAssetId: "facebook-logo-id",
+          displayOrder: 2,
           isActive: true
         }
       ])
     );
 
     await user.click(screen.getByRole("button", { name: /consultar/i }));
-    await screen.findByDisplayValue(/@readyforduel/i);
+    await screen.findByLabelText(/nombre de tienda/i);
+    await user.click(screen.getByRole("button", { name: /crear redes sociales/i }));
+    expect(await screen.findByRole("dialog", { name: /crear redes sociales/i })).toBeInTheDocument();
 
-    await user.clear(screen.getByLabelText(/handle/i));
+    await user.type(screen.getByLabelText(/plataforma/i), "Instagram");
     await user.type(screen.getByLabelText(/handle/i), "@yugistudio");
-    await user.clear(screen.getByLabelText(/^url$/i));
     await user.type(screen.getByLabelText(/^url$/i), "https://instagram.com/yugistudio");
+    await user.upload(screen.getByLabelText(/^logo$/i), instagramLogo);
+    await user.click(screen.getByRole("button", { name: /agregar red/i }));
+    const platformInputs = screen.getAllByLabelText(/plataforma/i);
+    const handleInputs = screen.getAllByLabelText(/handle/i);
+    const urlInputs = screen.getAllByLabelText(/^url$/i);
+    const logoInputs = screen.getAllByLabelText(/^logo$/i);
+    await user.type(platformInputs[1], "Facebook");
+    await user.type(handleInputs[1], "Yugi Studio");
+    await user.type(urlInputs[1], "https://facebook.com/yugistudio");
+    await user.upload(logoInputs[1], facebookLogo);
     await user.click(screen.getByRole("button", { name: /guardar redes/i }));
 
     await waitFor(() => {
       expect(fetchMock.mock.calls.some(([url, options]) => url === "/api/stores/store-id/social-links" && options?.method === "PUT")).toBe(true);
     });
+
+    const uploadCalls = fetchMock.mock.calls.filter(([url]) => url === "/api/stores/store-id/assets");
+    expect(uploadCalls).toHaveLength(2);
+    expect((uploadCalls[0]?.[1]?.body as FormData).get("category")).toBe("SOCIAL_LOGO");
+    expect((uploadCalls[0]?.[1]?.body as FormData).get("image")).toBe(instagramLogo);
+    expect((uploadCalls[1]?.[1]?.body as FormData).get("category")).toBe("SOCIAL_LOGO");
+    expect((uploadCalls[1]?.[1]?.body as FormData).get("image")).toBe(facebookLogo);
 
     const socialCall = fetchMock.mock.calls.find(([url, options]) => url === "/api/stores/store-id/social-links" && options?.method === "PUT");
     expect(socialCall?.[1]).toEqual(
@@ -1633,15 +1703,23 @@ describe("App", () => {
               platform: "Instagram",
               handle: "@yugistudio",
               url: "https://instagram.com/yugistudio",
-              iconAssetId: "social-logo-id",
+              iconAssetId: "instagram-logo-id",
               displayOrder: 1,
+              isActive: true
+            },
+            {
+              platform: "Facebook",
+              handle: "Yugi Studio",
+              url: "https://facebook.com/yugistudio",
+              iconAssetId: "facebook-logo-id",
+              displayOrder: 2,
               isActive: true
             }
           ]
         })
       })
     );
-    expect(await screen.findByText(/1 redes sociales guardadas/i)).toBeInTheDocument();
+    expect(await screen.findByText(/2 redes sociales guardadas/i)).toBeInTheDocument();
   });
 
   it("generates and previews the final deck image", async () => {
@@ -1696,7 +1774,7 @@ describe("App", () => {
     expect(await screen.findByText(/imagen generada 1080x1350/i)).toBeInTheDocument();
     expect(screen.getByAltText(/imagen generada del deck/i)).toHaveAttribute(
       "src",
-      "http://127.0.0.1:8081/generated-deck-images/deck.png"
+      "/images/generated-deck-images/deck.png"
     );
   });
 
@@ -1761,7 +1839,7 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: /generar imagen/i }));
 
     const downloadLink = await screen.findByRole("link", { name: /descargar png/i });
-    expect(downloadLink).toHaveAttribute("href", "http://127.0.0.1:8081/generated-deck-images/deck.png");
+    expect(downloadLink).toHaveAttribute("href", "/images/generated-deck-images/deck.png");
     expect(downloadLink).toHaveAttribute("download");
   });
 

@@ -445,7 +445,7 @@ function getTitle(mode: AuthMode): string {
   }
 
   if (mode === "catalogs") {
-    return "Catalogos y redes";
+    return "Eventos y torneos";
   }
 
   return "Login local";

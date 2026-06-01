@@ -691,6 +691,7 @@ select:disabled {
 }
 
 .catalog-form input,
+.catalog-form select,
 .social-link-row input {
   width: 100%;
   min-height: 40px;
@@ -713,6 +714,14 @@ select:disabled {
   padding: 12px;
   border-radius: 8px;
   background: #f4f7fb;
+}
+
+.catalog-event-row {
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.9fr) minmax(90px, 0.5fr) minmax(170px, auto);
+}
+
+.social-link-modal-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr) 88px 92px 118px;
 }
 
 @media (max-width: 860px) {
@@ -758,6 +767,8 @@ select:disabled {
   .asset-upload-grid,
   .catalogs-grid,
   .social-link-row,
+  .catalog-event-row,
+  .social-link-modal-row,
   .deck-list-row {
     grid-template-columns: 1fr;
   }

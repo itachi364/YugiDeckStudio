@@ -13,6 +13,7 @@ import { LoginUseCase } from "./application/login.use-case";
 import { RegisterUserUseCase } from "./application/register-user.use-case";
 import { StoreAccessPolicyService } from "./application/store-access-policy.service";
 import { AuthController } from "./auth.controller";
+import { AuthPayloadCryptoService } from "./infrastructure/auth-payload-crypto.service";
 import { BcryptPasswordHasherAdapter } from "./infrastructure/bcrypt-password-hasher.adapter";
 import { DeckScopeGuard } from "./infrastructure/deck-scope.guard";
 import { JwtAuthGuard } from "./infrastructure/jwt-auth.guard";
@@ -38,6 +39,7 @@ import { PASSWORD_HASHER_PORT } from "./ports/password-hasher.port";
     AssignPermissionsToRoleUseCase,
     AssignRolesToUserUseCase,
     StoreAccessPolicyService,
+    AuthPayloadCryptoService,
     JwtAuthGuard,
     RootOnlyGuard,
     PermissionGuard,
@@ -60,6 +62,7 @@ import { PASSWORD_HASHER_PORT } from "./ports/password-hasher.port";
     PermissionGuard,
     StoreScopeGuard,
     DeckScopeGuard,
+    AuthPayloadCryptoService,
     StoreAccessPolicyService
   ]
 })

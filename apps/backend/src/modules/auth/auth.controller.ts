@@ -16,8 +16,10 @@ import { ChangePasswordDto } from "./dto/change-password.dto";
 import { ConfigureFirstStoreAdminDto } from "./dto/configure-first-store-admin.dto";
 import { ConfigurePermissionDto } from "./dto/configure-permission.dto";
 import { ConfigureRoleDto } from "./dto/configure-role.dto";
+import { EncryptedAuthPayloadDto } from "./dto/encrypted-auth-payload.dto";
 import { LoginDto } from "./dto/login.dto";
 import { RegisterUserDto } from "./dto/register-user.dto";
+import { AuthPayloadCryptoService } from "./infrastructure/auth-payload-crypto.service";
 import { CurrentUser } from "./infrastructure/current-user.decorator";
 import { JwtAuthGuard } from "./infrastructure/jwt-auth.guard";
 import { PermissionGuard } from "./infrastructure/permission.guard";
@@ -37,7 +39,8 @@ export class AuthController {
     private readonly configurePermissionsUseCase: ConfigurePermissionsUseCase,
     private readonly listUsersUseCase: ListUsersUseCase,
     private readonly assignPermissionsToRoleUseCase: AssignPermissionsToRoleUseCase,
-    private readonly assignRolesToUserUseCase: AssignRolesToUserUseCase
+    private readonly assignRolesToUserUseCase: AssignRolesToUserUseCase,
+    private readonly authPayloadCrypto: AuthPayloadCryptoService
   ) {}
 
   @Post("root/initialize")
@@ -45,30 +48,39 @@ export class AuthController {
     return this.initializeRootUserUseCase.execute();
   }
 
+  @Get("encryption-key")
+  getEncryptionKey() {
+    return this.authPayloadCrypto.getPublicKey();
+  }
+
   @Post("login")
-  login(@Body() body: LoginDto) {
-    return this.loginUseCase.execute(body);
+  login(@Body() body: EncryptedAuthPayloadDto) {
+    return this.loginUseCase.execute(this.authPayloadCrypto.decryptJson<LoginDto>(body.encryptedPayload));
   }
 
   @Post("change-password")
   @UseGuards(JwtAuthGuard)
-  changePassword(@CurrentUser() user: AuthenticatedUserPayload, @Body() body: ChangePasswordDto) {
+  changePassword(@CurrentUser() user: AuthenticatedUserPayload, @Body() body: EncryptedAuthPayloadDto) {
+    const decryptedBody = this.authPayloadCrypto.decryptJson<ChangePasswordDto>(body.encryptedPayload);
+
     return this.changePasswordUseCase.execute({
       userId: user.sub,
-      currentPassword: body.currentPassword,
-      newPassword: body.newPassword
+      currentPassword: decryptedBody.currentPassword,
+      newPassword: decryptedBody.newPassword
     });
   }
 
   @Post("register")
-  register(@Body() body: RegisterUserDto) {
-    return this.registerUserUseCase.execute(body);
+  register(@Body() body: EncryptedAuthPayloadDto) {
+    return this.registerUserUseCase.execute(this.authPayloadCrypto.decryptJson<RegisterUserDto>(body.encryptedPayload));
   }
 
   @Post("root/store-admin")
   @UseGuards(JwtAuthGuard, RootOnlyGuard)
-  configureFirstStoreAdmin(@Body() body: ConfigureFirstStoreAdminDto) {
-    return this.configureFirstStoreAdminUseCase.execute(body);
+  configureFirstStoreAdmin(@Body() body: EncryptedAuthPayloadDto) {
+    return this.configureFirstStoreAdminUseCase.execute(
+      this.authPayloadCrypto.decryptJson<ConfigureFirstStoreAdminDto>(body.encryptedPayload)
+    );
   }
 
   @Get("users")

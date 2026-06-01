@@ -105,8 +105,8 @@ services:
     image: nginxinc/nginx-unprivileged:1.27-alpine
     container_name: yugideckstudio-image-storage
     restart: unless-stopped
-    ports:
-      - "${IMAGE_STORAGE_PORT:-8081}:8080"
+    expose:
+      - "8080"
     volumes:
       - yugideck_image_data:/usr/share/nginx/html:ro
     networks:

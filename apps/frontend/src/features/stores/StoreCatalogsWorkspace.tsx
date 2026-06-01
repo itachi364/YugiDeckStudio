@@ -1,11 +1,9 @@
-import { FormEvent, useCallback, useEffect, useState } from "react";
-import { AlertCircle, CalendarPlus, Plus, Save, Search, Share2, ShieldCheck, Trophy } from "lucide-react";
+import { FormEvent, ReactNode, useCallback, useEffect, useState } from "react";
+import { AlertCircle, CalendarPlus, Plus, Search, ShieldCheck, Trophy, X } from "lucide-react";
 import {
   ConfigureStoreCatalogInput,
   ConfigureTournamentInput,
-  StoreAssetOption,
   StoreEventType,
-  StoreSocialLink,
   StoreSummary,
   StoreTournament,
   storeApi
@@ -21,24 +19,12 @@ type Feedback = {
   message: string;
 } | null;
 
-const emptySocialLink: StoreSocialLink = {
-  platform: "",
-  handle: "",
-  url: null,
-  iconAssetId: null,
-  displayOrder: 1,
-  isActive: true
-};
-
 export function StoreCatalogsWorkspace({ accessToken, defaultStoreId }: StoreCatalogsWorkspaceProps) {
   const [storeId, setStoreId] = useState(defaultStoreId ?? "");
   const [eventTypes, setEventTypes] = useState<StoreEventType[]>([]);
   const [tournaments, setTournaments] = useState<StoreTournament[]>([]);
-  const [socialLinks, setSocialLinks] = useState<StoreSocialLink[]>([]);
   const [stores, setStores] = useState<StoreSummary[]>([]);
-  const [eventLogoAssets, setEventLogoAssets] = useState<StoreAssetOption[]>([]);
-  const [tournamentLogoAssets, setTournamentLogoAssets] = useState<StoreAssetOption[]>([]);
-  const [socialLogoAssets, setSocialLogoAssets] = useState<StoreAssetOption[]>([]);
+  const [selectedEvent, setSelectedEvent] = useState<StoreEventType | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [isWorking, setIsWorking] = useState(false);
 
@@ -48,7 +34,7 @@ export function StoreCatalogsWorkspace({ accessToken, defaultStoreId }: StoreCat
     if (!normalizedStoreId) {
       setFeedback({
         tone: "error",
-        message: "La tienda es obligatoria para configurar eventos, torneos y redes."
+        message: "La tienda es obligatoria para configurar eventos y torneos."
       });
       return;
     }
@@ -83,39 +69,24 @@ export function StoreCatalogsWorkspace({ accessToken, defaultStoreId }: StoreCat
     }
   }, [accessToken, storeId]);
 
-  const loadAssetOptions = useCallback(async () => {
-    if (!normalizedStoreId) {
-      setEventLogoAssets([]);
-      setSocialLogoAssets([]);
-      return;
-    }
-
-    const [eventLogos, tournamentLogos, socialLogos] = await Promise.all([
-      storeApi.listStoreAssets(accessToken, normalizedStoreId, "EVENT_LOGO"),
-      storeApi.listStoreAssets(accessToken, normalizedStoreId, "TOURNAMENT_LOGO"),
-      storeApi.listStoreAssets(accessToken, normalizedStoreId, "SOCIAL_LOGO")
-    ]);
-    setEventLogoAssets(eventLogos);
-    setTournamentLogoAssets(tournamentLogos);
-    setSocialLogoAssets(socialLogos);
-  }, [accessToken, normalizedStoreId]);
-
   useEffect(() => {
     void loadStores();
   }, [loadStores]);
 
+  const uploadLogo = async (category: "EVENT_LOGO" | "TOURNAMENT_LOGO", image: File) => {
+    const result = await storeApi.uploadStoreAsset(accessToken, normalizedStoreId, category, image);
+    return result.imageAssetId;
+  };
+
   const handleLoadConfiguration = () =>
     runStoreAction(async () => {
-      const [events, loadedTournaments, links] = await Promise.all([
+      const [events, loadedTournaments] = await Promise.all([
         storeApi.listEventTypes(accessToken, normalizedStoreId),
-        storeApi.listTournaments(accessToken, normalizedStoreId),
-        storeApi.listSocialLinks(accessToken, normalizedStoreId),
-        loadAssetOptions()
+        storeApi.listTournaments(accessToken, normalizedStoreId)
       ]);
 
       setEventTypes(events);
       setTournaments(loadedTournaments);
-      setSocialLinks(links.length > 0 ? links : [{ ...emptySocialLink }]);
       setFeedback({
         tone: "success",
         message: "Catalogos de tienda cargados."
@@ -126,98 +97,40 @@ export function StoreCatalogsWorkspace({ accessToken, defaultStoreId }: StoreCat
     event.preventDefault();
     const form = event.currentTarget;
     const input = readCatalogForm(form);
+    const logoFile = readOptionalFile(form, "logoFile");
 
-    runStoreAction(async () => {
-      const result = await storeApi.createEventType(accessToken, normalizedStoreId, input);
+    void runStoreAction(async () => {
+      const logoAssetId = logoFile ? await uploadLogo("EVENT_LOGO", logoFile) : null;
+      const result = await storeApi.createEventType(accessToken, normalizedStoreId, {
+        ...input,
+        logoAssetId
+      });
       setEventTypes((current) => [...current, result]);
       form.reset();
       setFeedback({
         tone: "success",
-        message: `Tipo de evento ${result.name} creado.`
+        message: `Evento ${result.name} creado.`
       });
     });
   };
 
-  const handleCreateTournament = (input: ConfigureTournamentInput) =>
+  const handleCreateTournament = async (input: ConfigureTournamentInput) =>
     runStoreAction(async () => {
       const result = await storeApi.createTournament(accessToken, normalizedStoreId, input);
       setTournaments((current) => [...current, result]);
+      setSelectedEvent(null);
       setFeedback({
         tone: "success",
         message: `Torneo ${result.name} creado.`
       });
     });
 
-  const handleUploadTournamentLogo = async (image: File) => {
-    if (!normalizedStoreId) {
-      throw new Error("La tienda es obligatoria para cargar logos de torneo.");
-    }
-
-    const result = await storeApi.uploadStoreAsset(accessToken, normalizedStoreId, "TOURNAMENT_LOGO", image);
-    const asset = {
-      id: result.imageAssetId,
-      category: result.category,
-      storagePath: result.storagePath,
-      originalFilename: image.name
-    };
-    setTournamentLogoAssets((current) => [...current, asset]);
-    setFeedback({
-      tone: "success",
-      message: "Logo de torneo cargado."
-    });
-
-    return asset.id;
-  };
-
-  const handleReplaceSocialLinks = () =>
-    runStoreAction(async () => {
-      const normalizedLinks = socialLinks
-        .filter((link) => link.platform.trim() && link.handle.trim())
-        .map((link, index) => ({
-          platform: link.platform.trim(),
-          handle: link.handle.trim(),
-          url: emptyToNull(link.url ?? ""),
-          iconAssetId: emptyToNull(link.iconAssetId ?? ""),
-          displayOrder: Math.max(1, Number(link.displayOrder) || index + 1),
-          isActive: Boolean(link.isActive)
-        }));
-
-      const result = await storeApi.replaceSocialLinks(accessToken, normalizedStoreId, normalizedLinks);
-      setSocialLinks(result.length > 0 ? result : [{ ...emptySocialLink }]);
-      setFeedback({
-        tone: "success",
-        message: `${result.length} redes sociales guardadas.`
-      });
-    });
-
-  const updateSocialLink = (index: number, field: keyof StoreSocialLink, value: string | boolean) => {
-    setSocialLinks((current) =>
-      current.map((link, linkIndex) => {
-        if (linkIndex !== index) {
-          return link;
-        }
-
-        if (field === "displayOrder") {
-          return {
-            ...link,
-            displayOrder: Number(value)
-          };
-        }
-
-        return {
-          ...link,
-          [field]: value
-        };
-      })
-    );
-  };
-
   return (
     <div className="store-catalogs-layout">
       <div className="section-header">
         <div>
           <p className="eyebrow">Catalogos</p>
-          <h3>Eventos, torneos y redes</h3>
+          <h3>Eventos y torneos</h3>
         </div>
       </div>
 
@@ -240,7 +153,7 @@ export function StoreCatalogsWorkspace({ accessToken, defaultStoreId }: StoreCat
                 setStoreId(event.currentTarget.value);
                 setEventTypes([]);
                 setTournaments([]);
-                setSocialLinks([]);
+                setSelectedEvent(null);
               }}
             >
               <option value="">Selecciona una tienda</option>
@@ -264,14 +177,8 @@ export function StoreCatalogsWorkspace({ accessToken, defaultStoreId }: StoreCat
             <h4>Eventos</h4>
             <CalendarPlus size={20} aria-hidden="true" />
           </div>
-          <CatalogList items={eventTypes} emptyText="Sin eventos." />
-          <CatalogForm
-            buttonLabel="Crear evento"
-            logoAssets={eventLogoAssets}
-            isWorking={isWorking}
-            labelPrefix="Evento"
-            onSubmit={handleCreateEventType}
-          />
+          <CatalogList emptyText="Sin eventos." items={eventTypes} onCreateTournament={setSelectedEvent} />
+          <CatalogForm buttonLabel="Crear evento" isWorking={isWorking} labelPrefix="Evento" onSubmit={handleCreateEventType} />
         </section>
 
         <section className="data-panel" aria-label="Torneos">
@@ -280,113 +187,31 @@ export function StoreCatalogsWorkspace({ accessToken, defaultStoreId }: StoreCat
             <Trophy size={20} aria-hidden="true" />
           </div>
           <TournamentList items={tournaments} />
-          <TournamentForm
-            eventTypes={eventTypes}
-            logoAssets={tournamentLogoAssets}
-            isWorking={isWorking}
-            onSubmit={handleCreateTournament}
-            onUploadLogo={handleUploadTournamentLogo}
-          />
+          <p className="empty-state">Crea torneos desde la fila del evento correspondiente.</p>
         </section>
       </div>
 
-      <section className="data-panel" aria-label="Redes sociales">
-        <div className="section-header">
-          <h4>Redes sociales</h4>
-          <Share2 size={20} aria-hidden="true" />
-        </div>
-        <div className="social-link-list">
-          {socialLinks.map((link, index) => (
-            <article className="social-link-row" key={`${link.id ?? "new"}-${index}`}>
-              <label>
-                Plataforma
-                <input
-                  required
-                  type="text"
-                  value={link.platform}
-                  onChange={(event) => updateSocialLink(index, "platform", event.currentTarget.value)}
-                />
-              </label>
-              <label>
-                Handle
-                <input
-                  required
-                  type="text"
-                  value={link.handle}
-                  onChange={(event) => updateSocialLink(index, "handle", event.currentTarget.value)}
-                />
-              </label>
-              <label>
-                URL
-                <input
-                  type="url"
-                  value={link.url ?? ""}
-                  onChange={(event) => updateSocialLink(index, "url", event.currentTarget.value)}
-                />
-              </label>
-              <label>
-                Icono
-                <select
-                  value={link.iconAssetId ?? ""}
-                  onChange={(event) => updateSocialLink(index, "iconAssetId", event.currentTarget.value)}
-                >
-                  <option value="">Sin icono</option>
-                  {socialLogoAssets.map((asset) => (
-                    <option key={asset.id} value={asset.id}>
-                      {asset.originalFilename || asset.storagePath}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Orden
-                <input
-                  min={1}
-                  type="number"
-                  value={link.displayOrder ?? index + 1}
-                  onChange={(event) => updateSocialLink(index, "displayOrder", event.currentTarget.value)}
-                />
-              </label>
-              <label className="inline-check catalog-check">
-                <input
-                  checked={link.isActive ?? true}
-                  type="checkbox"
-                  onChange={(event) => updateSocialLink(index, "isActive", event.currentTarget.checked)}
-                />
-                Activa
-              </label>
-            </article>
-          ))}
-        </div>
-        <div className="review-footer-actions">
-          <button
-            className="secondary-button"
-            disabled={isWorking}
-            type="button"
-            onClick={() => setSocialLinks((current) => [...current, { ...emptySocialLink, displayOrder: current.length + 1 }])}
-          >
-            <Plus size={18} aria-hidden="true" />
-            <span>Agregar red</span>
-          </button>
-          <button className="primary-button" disabled={isWorking} type="button" onClick={handleReplaceSocialLinks}>
-            <Save size={18} aria-hidden="true" />
-            <span>Guardar redes</span>
-          </button>
-        </div>
-      </section>
+      {selectedEvent ? (
+        <ResponsiveModal title={`Crear torneo - ${selectedEvent.name}`} onClose={() => setSelectedEvent(null)}>
+          <TournamentForm
+            eventType={selectedEvent}
+            isWorking={isWorking}
+            onSubmit={handleCreateTournament}
+            onUploadLogo={(image) => uploadLogo("TOURNAMENT_LOGO", image)}
+          />
+        </ResponsiveModal>
+      ) : null}
     </div>
   );
 }
 
 function CatalogForm({
   buttonLabel,
-  logoAssets,
   isWorking,
   labelPrefix,
   onSubmit
 }: {
   buttonLabel: string;
-  logoAssets: StoreAssetOption[];
   isWorking: boolean;
   labelPrefix: string;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -403,14 +228,7 @@ function CatalogForm({
       </label>
       <label>
         {labelPrefix} logo
-        <select name="logoAssetId">
-          <option value="">Sin logo</option>
-          {logoAssets.map((asset) => (
-            <option key={asset.id} value={asset.id}>
-              {asset.originalFilename || asset.storagePath}
-            </option>
-          ))}
-        </select>
+        <input accept="image/jpeg,image/png,image/webp" name="logoFile" type="file" />
       </label>
       <label className="inline-check catalog-check">
         <input defaultChecked name="isActive" type="checkbox" />
@@ -425,72 +243,44 @@ function CatalogForm({
 }
 
 function TournamentForm({
-  eventTypes,
-  logoAssets,
+  eventType,
   isWorking,
   onSubmit,
   onUploadLogo
 }: {
-  eventTypes: StoreEventType[];
-  logoAssets: StoreAssetOption[];
+  eventType: StoreEventType;
   isWorking: boolean;
-  onSubmit: (input: ConfigureTournamentInput) => void;
+  onSubmit: (input: ConfigureTournamentInput) => Promise<void>;
   onUploadLogo: (image: File) => Promise<string>;
 }) {
-  const [eventTypeId, setEventTypeId] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [logoAssetId, setLogoAssetId] = useState("");
   const [eventDate, setEventDate] = useState("");
   const [location, setLocation] = useState("");
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    onSubmit({
-      eventTypeId,
-      name,
-      description: emptyToNull(description),
-      logoAssetId: emptyToNull(logoAssetId),
-      eventDate,
-      location: emptyToNull(location)
-    });
-    setName("");
-    setDescription("");
-    setLogoAssetId("");
-    setEventDate("");
-    setLocation("");
-  };
-
-  const handleUploadLogo = async () => {
-    if (!logoFile) {
-      return;
-    }
-
     setIsUploadingLogo(true);
     try {
-      const assetId = await onUploadLogo(logoFile);
-      setLogoAssetId(assetId);
-      setLogoFile(null);
+      const logoAssetId = logoFile ? await onUploadLogo(logoFile) : null;
+      await onSubmit({
+        eventTypeId: eventType.id,
+        name,
+        description: emptyToNull(description),
+        logoAssetId,
+        eventDate,
+        location: emptyToNull(location)
+      });
     } finally {
       setIsUploadingLogo(false);
     }
   };
 
   return (
-    <form className="catalog-form" aria-label="Crear torneo" onSubmit={handleSubmit}>
-      <label>
-        Evento
-        <select required value={eventTypeId} onChange={(event) => setEventTypeId(event.currentTarget.value)}>
-          <option value="">Selecciona evento</option>
-          {eventTypes.map((eventType) => (
-            <option key={eventType.id} value={eventType.id}>
-              {eventType.name}
-            </option>
-          ))}
-        </select>
-      </label>
+    <form className="catalog-form" aria-label="Crear torneo" onSubmit={(event) => void handleSubmit(event)}>
+      <p className="empty-state">Evento seleccionado: {eventType.name}</p>
       <label>
         Torneo nombre
         <input required type="text" value={name} onChange={(event) => setName(event.currentTarget.value)} />
@@ -509,36 +299,29 @@ function TournamentForm({
       </label>
       <label>
         Torneo logo
-        <select value={logoAssetId} onChange={(event) => setLogoAssetId(event.currentTarget.value)}>
-          <option value="">Sin logo</option>
-          {logoAssets.map((asset) => (
-            <option key={asset.id} value={asset.id}>
-              {asset.originalFilename || asset.storagePath}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Cargar logo
         <input
           accept="image/jpeg,image/png,image/webp"
           type="file"
           onChange={(event) => setLogoFile(event.currentTarget.files?.[0] ?? null)}
         />
       </label>
-      <button className="secondary-button" disabled={isWorking || isUploadingLogo || !logoFile} type="button" onClick={() => void handleUploadLogo()}>
+      <button className="secondary-button" disabled={isWorking || isUploadingLogo} type="submit">
         <Plus size={18} aria-hidden="true" />
-        <span>{isUploadingLogo ? "Subiendo" : "Subir logo"}</span>
-      </button>
-      <button className="secondary-button" disabled={isWorking} type="submit">
-        <Plus size={18} aria-hidden="true" />
-        <span>Crear torneo</span>
+        <span>{isUploadingLogo ? "Subiendo logo" : "Crear torneo"}</span>
       </button>
     </form>
   );
 }
 
-function CatalogList({ emptyText, items }: { emptyText: string; items: StoreEventType[] }) {
+function CatalogList({
+  emptyText,
+  items,
+  onCreateTournament
+}: {
+  emptyText: string;
+  items: StoreEventType[];
+  onCreateTournament: (eventType: StoreEventType) => void;
+}) {
   if (items.length === 0) {
     return <p className="empty-state">{emptyText}</p>;
   }
@@ -546,13 +329,17 @@ function CatalogList({ emptyText, items }: { emptyText: string; items: StoreEven
   return (
     <div className="table-list">
       {items.map((item) => (
-        <article className="table-row" key={item.id}>
+        <article className="table-row catalog-event-row" key={item.id}>
           <div>
             <strong>{item.name}</strong>
             <span>{item.description || "Sin descripcion"}</span>
           </div>
           <span>{item.logoAssetId || "Sin logo"}</span>
           <span>{item.isActive ? "Activo" : "Inactivo"}</span>
+          <button className="secondary-button" type="button" onClick={() => onCreateTournament(item)}>
+            <Plus size={18} aria-hidden="true" />
+            <span>Crear torneo</span>
+          </button>
         </article>
       ))}
     </div>
@@ -586,13 +373,47 @@ function readCatalogForm(form: HTMLFormElement): ConfigureStoreCatalogInput {
   return {
     name: String(formData.get("name") ?? ""),
     description: emptyToNull(String(formData.get("description") ?? "")),
-    logoAssetId: emptyToNull(String(formData.get("logoAssetId") ?? "")),
+    logoAssetId: null,
     isActive: formData.get("isActive") === "on"
   };
+}
+
+function readOptionalFile(form: HTMLFormElement, field: string): File | null {
+  const input = form.elements.namedItem(field);
+  if (!(input instanceof HTMLInputElement)) {
+    return null;
+  }
+
+  const file = input.files?.[0] ?? null;
+  return file && file.size > 0 ? file : null;
 }
 
 function emptyToNull(value: string): string | null {
   const trimmedValue = value.trim();
 
   return trimmedValue ? trimmedValue : null;
+}
+
+function ResponsiveModal({
+  title,
+  children,
+  onClose
+}: {
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section aria-label={title} aria-modal="true" className="modal-surface" role="dialog">
+        <header className="modal-header">
+          <h3>{title}</h3>
+          <button aria-label="Cerrar modal" className="icon-button" type="button" onClick={onClose}>
+            <X size={18} aria-hidden="true" />
+          </button>
+        </header>
+        <div className="modal-body">{children}</div>
+      </section>
+    </div>
+  );
 }

@@ -1,3 +1,5 @@
+import { encryptAuthPayload } from "../auth/auth-crypto";
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 export type SecurityUser = {
@@ -96,13 +98,15 @@ export const securityApi = {
   },
 
   createStoreAdmin(accessToken: string, input: CreateStoreAdminInput) {
-    return requestJson<{ storeId: string; storeName: string; adminUserId: string; username: string; roles: string[] }>(
-      "/auth/root/store-admin",
-      accessToken,
-      {
-        method: "POST",
-        body: JSON.stringify(input)
-      }
+    return encryptAuthPayload(input).then((encryptedInput) =>
+      requestJson<{ storeId: string; storeName: string; adminUserId: string; username: string; roles: string[] }>(
+        "/auth/root/store-admin",
+        accessToken,
+        {
+          method: "POST",
+          body: JSON.stringify(encryptedInput)
+        }
+      )
     );
   },
 

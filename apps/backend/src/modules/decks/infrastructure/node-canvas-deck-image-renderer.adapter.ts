@@ -81,17 +81,19 @@ export class NodeCanvasDeckImageRendererAdapter implements DeckImageRendererPort
     context: ReturnType<ReturnType<typeof createCanvas>["getContext"]>,
     input: RenderDeckImageInput
   ): Promise<void> {
-    const topRightLogoPath = input.tournamentLogoPath ?? input.eventLogoPath;
-    const logoPaths = [input.primaryLogoPath, input.secondaryLogoPath, topRightLogoPath].filter(Boolean) as string[];
     const logoSlots = [
-      { x: 42, y: 38, width: 220, height: 95 },
-      { x: 430, y: 28, width: 220, height: 115 },
-      { x: 858, y: 34, width: 145, height: 145 }
+      { path: input.primaryLogoPath, box: { x: 42, y: 38, width: 220, height: 95 } },
+      { path: input.secondaryLogoPath, box: { x: 430, y: 28, width: 220, height: 115 } },
+      { path: input.tournamentLogoPath, box: { x: 858, y: 34, width: 145, height: 145 } }
     ];
 
-    for (let index = 0; index < logoPaths.length && index < logoSlots.length; index += 1) {
-      const image = await loadImage(logoPaths[index]);
-      this.drawContainImage(context, image, logoSlots[index]);
+    for (const slot of logoSlots) {
+      if (!slot.path) {
+        continue;
+      }
+
+      const image = await loadImage(slot.path);
+      this.drawContainImage(context, image, slot.box);
     }
 
     context.textAlign = "right";
@@ -199,27 +201,32 @@ export class NodeCanvasDeckImageRendererAdapter implements DeckImageRendererPort
     context: ReturnType<ReturnType<typeof createCanvas>["getContext"]>,
     input: RenderDeckImageInput
   ): Promise<void> {
+    if (input.eventLogoPath) {
+      const eventLogo = await loadImage(input.eventLogoPath);
+      this.drawContainImage(context, eventLogo, { x: 868, y: 1215, width: 155, height: 95 });
+    }
+
     const orderedSocialLinks = [...input.socialLinks].sort((left, right) => left.displayOrder - right.displayOrder);
     let cursorX = 42;
 
     for (const socialLink of orderedSocialLinks) {
       if (socialLink.iconPath) {
         const icon = await loadImage(socialLink.iconPath);
-        this.drawContainImage(context, icon, { x: cursorX, y: 1260, width: 34, height: 34 });
+        this.drawContainImage(context, icon, { x: cursorX, y: 1254, width: 34, height: 34 });
         cursorX += 42;
       }
 
       context.fillStyle = "#ffffff";
       context.textAlign = "left";
       context.font = "bold 24px Arial";
-      context.fillText(socialLink.handle || socialLink.platform, cursorX, 1286);
+      context.fillText(socialLink.handle || socialLink.platform, cursorX, 1280);
       cursorX += context.measureText(socialLink.handle || socialLink.platform).width + 30;
     }
 
     context.textAlign = "right";
     context.font = "bold 24px Arial";
     context.fillStyle = "#ffffff";
-    context.fillText(input.sourceCreditText || "YugiDeckStudio", 1038, 1288);
+    context.fillText(input.sourceCreditText || "YugiDeckStudio", 1038, 1322);
   }
 
   private drawCoverImage(
